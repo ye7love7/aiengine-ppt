@@ -47,10 +47,17 @@ async def startup_event() -> None:
 async def create_task(request: Request) -> TaskCreateResponse:
     form: FormData | None = None
     content_type = request.headers.get("content-type", "")
+    print(
+        f"[create_task] received content_type={content_type!r} origin={request.headers.get('origin')!r} "
+        f"user_agent={request.headers.get('user-agent', '')[:120]!r}",
+        flush=True,
+    )
     if content_type.startswith("application/json"):
         task_request = await _parse_json_task_request(request)
     elif content_type.startswith("multipart/form-data"):
+        print("[create_task] parsing multipart form", flush=True)
         form = await request.form()
+        print(f"[create_task] multipart parsed with {len(list(form.multi_items()))} fields", flush=True)
         task_request = _parse_multipart_task_request(form)
     else:
         raise HTTPException(status_code=415, detail="Unsupported content type")
@@ -59,10 +66,12 @@ async def create_task(request: Request) -> TaskCreateResponse:
     state = STORE.create_task(task_request, upstream_user_id=upstream_user_id)
     if task_request.source_mode == "upload":
         assert form is not None
+        print(f"[create_task] persisting uploads for task_id={state.task_id}", flush=True)
         _persist_uploads(form, state.task_id)
     task = asyncio.create_task(asyncio.to_thread(run_task, state.task_id))
     _RUNNING_TASKS[state.task_id] = task
     task.add_done_callback(lambda _: _RUNNING_TASKS.pop(state.task_id, None))
+    print(f"[create_task] response ready task_id={state.task_id}", flush=True)
     return TaskCreateResponse(task_id=state.task_id, status=state.status, stage=state.stage)
 
 

@@ -40,6 +40,24 @@ TEMPLATE_BY_STYLE = {
 }
 
 
+def _available_template_names() -> set[str]:
+    layouts_root = SETTINGS.repo_root / "skills" / "ppt-master" / "templates" / "layouts"
+    if not layouts_root.exists():
+        return set()
+    return {path.name for path in layouts_root.iterdir() if path.is_dir()}
+
+
+def _resolve_existing_template_name(candidate: Any, fallback_style: str = "") -> str:
+    normalized = _normalize_template_name(candidate)
+    available = _available_template_names()
+    if normalized and normalized in available:
+        return normalized
+    fallback = _normalize_template_name(TEMPLATE_BY_STYLE.get(fallback_style, ""))
+    if fallback and fallback in available:
+        return fallback
+    return ""
+
+
 def run_task(task_id: str) -> None:
     state = STORE.load_state(task_id)
     request_data = state.request
@@ -253,16 +271,24 @@ Hard example-strong constraints:
     if style_locked and example_profile:
         locked_style = str(example_profile.get("style_tag") or prefer_style or "general")
         strategy["style_mode"] = locked_style
-        strategy["template_name"] = template_name or TEMPLATE_BY_STYLE.get(locked_style, "")
-    else:
-        strategy["template_name"] = (
-            _normalize_template_name(strategy.get("template_name"))
-            or template_name
-            or TEMPLATE_BY_STYLE.get(strategy.get("style_mode", "general"), "")
+        strategy["template_name"] = _resolve_existing_template_name(
+            template_name or TEMPLATE_BY_STYLE.get(locked_style, ""),
+            locked_style,
         )
+    else:
+        strategy["style_mode"] = _normalize_style(strategy.get("style_mode"), prefer_style)
+        llm_template_name = _normalize_template_name(strategy.get("template_name"))
+        strategy["template_name"] = _resolve_existing_template_name(
+            llm_template_name or template_name or TEMPLATE_BY_STYLE.get(strategy.get("style_mode", "general"), ""),
+            strategy["style_mode"],
+        )
+        if llm_template_name and llm_template_name != strategy["template_name"]:
+            STORE.append_log(
+                task_id,
+                f"Strategist proposed unknown template '{llm_template_name}', falling back to '{strategy['template_name'] or 'no template'}'.",
+            )
         if not template_name and strategy["template_name"]:
             _copy_template(project_path, strategy["template_name"])
-        strategy["style_mode"] = _normalize_style(strategy.get("style_mode"), prefer_style)
     strategy["pages"] = _normalize_pages(strategy)
     strategy["page_count"] = len(strategy["pages"])
     strategy["image_strategy"] = "user_provided" if image_inventory else "none"

@@ -20,6 +20,7 @@
     input:focus,select:focus,textarea:focus{border-color:rgba(190,95,63,.45);box-shadow:0 0 0 4px rgba(190,95,63,.1)}
     button{border:none;border-radius:16px;padding:12px 16px;transition:.18s ease}
     .primary{background:linear-gradient(135deg,var(--accent),#d98561);color:#fff}.secondary{background:#fff;border:1px solid var(--line);color:var(--ink)}.ghost{background:rgba(47,98,83,.08);color:var(--accent2)}.danger{background:rgba(186,65,56,.1);color:var(--bad)}button:hover{transform:translateY(-1px)}
+    button:disabled{opacity:.62;cursor:not-allowed;transform:none}
     .actions{display:flex;gap:12px;flex-wrap:wrap}
     .example-list,.meta-list{display:grid;gap:10px}
     .item,.meta-item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.68)}
@@ -136,6 +137,7 @@
         <button class="primary" id="createTaskBtn">开始生成</button>
         <button class="secondary" id="pollingBtn">开启轮询</button>
       </div>
+      <div id="submitHint" class="tiny" style="margin-top:10px"></div>
       <p class="tiny" style="margin-top:10px">页面默认隐藏高级参数，内部仍按 `notes_style=formal` 和 `output_formats=[native_pptx, svg_pptx]` 提交。</p>
     </section>
 
@@ -185,19 +187,19 @@
   </div>
 
   <script>
-    const state={baseUrl:localStorage.getItem("ppt_api_base_url")||"http://127.0.0.1:8000",taskId:"",timer:null,nativeArtifactName:""};
+    const state={baseUrl:localStorage.getItem("ppt_api_base_url")||"http://127.0.0.1:8000",taskId:"",timer:null,nativeArtifactName:"",isSubmitting:false};
     const $=id=>document.getElementById(id);
-    const els={baseUrl:$("baseUrl"),apiLabel:$("apiLabel"),templateName:$("templateName"),templateHint:$("templateHint"),exampleReference:$("exampleReference"),exampleHint:$("exampleHint"),sourceUploads:$("sourceUploads"),imageUploads:$("imageUploads"),uploadHint:$("uploadHint"),errorBanner:$("errorBanner"),examplesList:$("examplesList"),exampleDetailMeta:$("exampleDetailMeta"),exampleDetailPreview:$("exampleDetailPreview"),taskIdInput:$("taskIdInput"),taskMeta:$("taskMeta"),taskSummary:$("taskSummary"),pollingBtn:$("pollingBtn"),resultBox:$("resultBox"),downloadPptBtn:$("downloadPptBtn")};
+    const els={baseUrl:$("baseUrl"),apiLabel:$("apiLabel"),templateName:$("templateName"),templateHint:$("templateHint"),exampleReference:$("exampleReference"),exampleHint:$("exampleHint"),sourceUploads:$("sourceUploads"),imageUploads:$("imageUploads"),uploadHint:$("uploadHint"),submitHint:$("submitHint"),errorBanner:$("errorBanner"),examplesList:$("examplesList"),exampleDetailMeta:$("exampleDetailMeta"),exampleDetailPreview:$("exampleDetailPreview"),taskIdInput:$("taskIdInput"),taskMeta:$("taskMeta"),taskSummary:$("taskSummary"),pollingBtn:$("pollingBtn"),resultBox:$("resultBox"),downloadPptBtn:$("downloadPptBtn"),createTaskBtn:$("createTaskBtn")};
     init();
 
     function init(){els.baseUrl.value=state.baseUrl;bind();updateApiLabel();refreshBootstrap().catch(err=>showError(`初始化失败：${err.message}`));syncExampleTemplateState();updateUploadHint()}
     function bind(){
       $("saveBaseUrlBtn").addEventListener("click",()=>{state.baseUrl=normalizeBaseUrl(els.baseUrl.value);els.baseUrl.value=state.baseUrl;localStorage.setItem("ppt_api_base_url",state.baseUrl);updateApiLabel()});
       $("refreshExamplesBtn").addEventListener("click",()=>refreshBootstrap());
-      $("createTaskBtn").addEventListener("click",()=>createTask());
-      $("refreshTaskBtn").addEventListener("click",()=>refreshTask());
-      $("cancelTaskBtn").addEventListener("click",()=>cancelTask());
-      $("pollingBtn").addEventListener("click",()=>togglePolling());
+      els.createTaskBtn.addEventListener("click",()=>createTask().catch(err=>showError(err.message||String(err))));
+      $("refreshTaskBtn").addEventListener("click",()=>refreshTask().catch(err=>showError(err.message||String(err))));
+      $("cancelTaskBtn").addEventListener("click",()=>cancelTask().catch(err=>showError(err.message||String(err))));
+      $("pollingBtn").addEventListener("click",()=>togglePolling().catch(err=>showError(err.message||String(err))));
       $("clearFormBtn").addEventListener("click",()=>clearForm());
       els.taskIdInput.addEventListener("change",()=>state.taskId=els.taskIdInput.value.trim());
       els.sourceUploads.addEventListener("change",updateUploadHint);
@@ -209,7 +211,31 @@
     async function refreshBootstrap(){await Promise.all([loadTemplates(),loadExamples()])}
     function normalizeBaseUrl(v){v=(v||"").trim();if(!v)return"";return(/^https?:\/\//i.test(v)?v:`http://${v}`).replace(/\/$/,"")}
     function updateApiLabel(){els.apiLabel.textContent=normalizeBaseUrl(els.baseUrl.value)||"未配置"}
-    async function apiFetch(path,options={}){const res=await fetch(`${normalizeBaseUrl(els.baseUrl.value)}${path}`,options);if(!res.ok){let msg=`HTTP ${res.status}`;try{const data=await res.json();msg=data.detail||data.message||JSON.stringify(data)}catch{}showError(msg);throw new Error(msg)}const type=res.headers.get("content-type")||"";return type.includes("application/json")?res.json():res.blob()}
+    async function apiFetch(path,options={}){
+      const timeoutMs=options.timeoutMs||30000;
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(`timeout:${timeoutMs}`),timeoutMs);
+      try{
+        const res=await fetch(`${normalizeBaseUrl(els.baseUrl.value)}${path}`,{...options,signal:controller.signal});
+        if(!res.ok){
+          let msg=`HTTP ${res.status}`;
+          try{const data=await res.json();msg=data.detail||data.message||JSON.stringify(data)}catch{}
+          showError(msg);
+          throw new Error(msg);
+        }
+        const type=res.headers.get("content-type")||"";
+        return type.includes("application/json")?res.json():res.blob();
+      }catch(err){
+        if(err?.name==="AbortError"||String(err).startsWith("timeout:")){
+          const msg=`请求超时：${path} 在 ${Math.round(timeoutMs/1000)} 秒内未返回，请查看后端日志或稍后重试。`;
+          showError(msg);
+          throw new Error(msg);
+        }
+        throw err;
+      }finally{
+        clearTimeout(timer);
+      }
+    }
 
     async function loadTemplates(){const data=await apiFetch("/api/v1/templates");populateSelect(els.templateName,data.templates||[],"自动选择或无模板");syncExampleTemplateState()}
     async function loadExamples(){
@@ -269,19 +295,23 @@
         els.uploadHint.className="upload-hint warn";
         const invalidText=invalidSourceFiles.length?` 当前有 ${invalidSourceFiles.length} 个 0 B 源文档无效。`:"";
         els.uploadHint.textContent=`你当前没有上传任何真实文件。请先选择至少一个源文档；如果文件大小为 0 B，也会被视为无效上传。${invalidText}`;
+        if(!state.isSubmitting)els.submitHint.textContent="";
         return;
       }
       els.uploadHint.className="upload-hint";
       els.uploadHint.textContent=`已选择源文档 ${sourceFiles.length} 个：${sourceFiles.map(file=>`${file.name} (${formatBytes(file.size)})`).join("，")}${imageFiles.length?`；图片 ${imageFiles.length} 个：${imageFiles.map(file=>`${file.name} (${formatBytes(file.size)})`).join("，")}`:""}`;
+      els.submitHint.textContent=`本次将上传源文档 ${sourceFiles.length} 个${imageFiles.length?`，图片 ${imageFiles.length} 个`:""}。点击“开始生成”后，接口应立即返回 task_id。`;
     }
 
     async function createTask(){
+      if(state.isSubmitting)return;
       clearError();
       const projectName=$("projectName").value.trim();
       const exampleReference=nullable($("exampleReference").value);
       const sourceFiles=[...els.sourceUploads.files].filter(file=>file&&file.size>0);
       const imageFiles=[...els.imageUploads.files].filter(file=>file&&file.size>0);
       if(!sourceFiles.length){updateUploadHint();return fail("你当前没有上传任何真实文件")}
+      setSubmitting(true,`正在提交任务：源文档 ${sourceFiles.length} 个${imageFiles.length?`，图片 ${imageFiles.length} 个`:""}。`);
 
       const payload={
         source_mode:"upload",
@@ -302,14 +332,20 @@
       Object.entries(payload).forEach(([k,v])=>{if(v!==null&&v!==undefined)fd.append(k,Array.isArray(v)?JSON.stringify(v):v)});
       sourceFiles.forEach(file=>fd.append("source_files",file));
       imageFiles.forEach(file=>fd.append("image_files",file));
-
-      const data=await apiFetch("/api/v1/tasks",{method:"POST",body:fd});
-      state.taskId=data.task_id||"";
-      state.nativeArtifactName="";
-      els.taskIdInput.value=state.taskId;
-      renderResultPending("任务已创建，正在生成 PPT。");
-      await refreshTask();
-      startPolling();
+      renderResultPending("任务提交中，正在等待服务端返回 task_id。");
+      els.taskSummary.innerHTML=`当前阶段：<span class="code">正在提交请求</span><br>如果这里长时间没有变化，请查看后端窗口或浏览器控制台。`;
+      try{
+        const data=await apiFetch("/api/v1/tasks",{method:"POST",body:fd,timeoutMs:20000});
+        state.taskId=data.task_id||"";
+        state.nativeArtifactName="";
+        els.taskIdInput.value=state.taskId;
+        els.submitHint.textContent=`任务已受理，task_id=${state.taskId}`;
+        renderResultPending("任务已创建，正在生成 PPT。");
+        await refreshTask();
+        startPolling();
+      }finally{
+        setSubmitting(false);
+      }
     }
 
     async function refreshTask(){
@@ -360,7 +396,7 @@
 
     function startPolling(){stopPolling();state.timer=setInterval(()=>refreshTask().catch(err=>showError(err.message)),3000);els.pollingBtn.textContent="停止轮询"}
     function stopPolling(){if(state.timer){clearInterval(state.timer);state.timer=null;els.pollingBtn.textContent="开启轮询"}}
-    function togglePolling(){state.timer?stopPolling():startPolling()}
+    async function togglePolling(){state.timer?stopPolling():startPolling()}
 
     function clearForm(){
       $("projectName").value="";
@@ -374,13 +410,16 @@
       els.taskIdInput.value="";
       state.taskId="";
       state.nativeArtifactName="";
+      state.isSubmitting=false;
       syncExampleTemplateState();
       updateUploadHint();
       clearError();
+      els.submitHint.textContent="";
       renderResultNeutral("任务完成后，这里会显示最终 `native_pptx` 下载按钮。");
       els.taskSummary.textContent="暂无任务。";
       els.taskMeta.innerHTML='<span class="dot"></span><span>未开始</span>';
       els.downloadPptBtn.style.display="none";
+      setSubmitting(false);
     }
 
     function stageDesc(name){return{queued:"任务已创建，等待执行",ingest:"正在导入文档与图片",strategist:"正在规划页面结构",executor_svg:"正在生成页面",executor_notes:"正在生成讲稿备注",postprocess:"正在执行后处理",export:"正在导出 PPT",completed:"任务完成"}[name]||name}
@@ -396,6 +435,12 @@
     function renderResultPending(text){els.resultBox.className="result-box";els.resultBox.textContent=text;els.downloadPptBtn.style.display="none"}
     function renderResultSuccess(text){els.resultBox.className="result-box success";els.resultBox.textContent=text}
     function renderResultFail(text){els.resultBox.className="result-box fail";els.resultBox.textContent=text;els.downloadPptBtn.style.display="none"}
+    function setSubmitting(flag,message=""){
+      state.isSubmitting=flag;
+      els.createTaskBtn.disabled=flag;
+      els.createTaskBtn.textContent=flag?"正在提交...":"开始生成";
+      if(message)els.submitHint.textContent=message;
+    }
   </script>
 </body>
 </html>
