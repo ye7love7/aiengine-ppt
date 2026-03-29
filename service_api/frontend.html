@@ -98,6 +98,7 @@
           <div id="templateHint" class="tiny"></div>
         </div>
       </div>
+      <div id="modeHint" class="upload-hint warn" style="margin-top:12px">当前未选择样例风格参考，将按自动风格生成，不会套用任何样例。</div>
       <div class="grid two">
         <div class="field">
           <label for="preferStyle">风格偏好</label>
@@ -187,9 +188,10 @@
   </div>
 
   <script>
-    const state={baseUrl:localStorage.getItem("ppt_api_base_url")||"http://127.0.0.1:8000",taskId:"",timer:null,nativeArtifactName:"",isSubmitting:false};
+    const defaultBaseUrl=(location.protocol==="http:"||location.protocol==="https:")?location.origin:"http://127.0.0.1:8000";
+    const state={baseUrl:localStorage.getItem("ppt_api_base_url")||defaultBaseUrl,taskId:"",timer:null,nativeArtifactName:"",isSubmitting:false};
     const $=id=>document.getElementById(id);
-    const els={baseUrl:$("baseUrl"),apiLabel:$("apiLabel"),templateName:$("templateName"),templateHint:$("templateHint"),exampleReference:$("exampleReference"),exampleHint:$("exampleHint"),sourceUploads:$("sourceUploads"),imageUploads:$("imageUploads"),uploadHint:$("uploadHint"),submitHint:$("submitHint"),errorBanner:$("errorBanner"),examplesList:$("examplesList"),exampleDetailMeta:$("exampleDetailMeta"),exampleDetailPreview:$("exampleDetailPreview"),taskIdInput:$("taskIdInput"),taskMeta:$("taskMeta"),taskSummary:$("taskSummary"),pollingBtn:$("pollingBtn"),resultBox:$("resultBox"),downloadPptBtn:$("downloadPptBtn"),createTaskBtn:$("createTaskBtn")};
+    const els={baseUrl:$("baseUrl"),apiLabel:$("apiLabel"),templateName:$("templateName"),templateHint:$("templateHint"),exampleReference:$("exampleReference"),exampleHint:$("exampleHint"),modeHint:$("modeHint"),sourceUploads:$("sourceUploads"),imageUploads:$("imageUploads"),uploadHint:$("uploadHint"),submitHint:$("submitHint"),errorBanner:$("errorBanner"),examplesList:$("examplesList"),exampleDetailMeta:$("exampleDetailMeta"),exampleDetailPreview:$("exampleDetailPreview"),taskIdInput:$("taskIdInput"),taskMeta:$("taskMeta"),taskSummary:$("taskSummary"),pollingBtn:$("pollingBtn"),resultBox:$("resultBox"),downloadPptBtn:$("downloadPptBtn"),createTaskBtn:$("createTaskBtn")};
     init();
 
     function init(){els.baseUrl.value=state.baseUrl;bind();updateApiLabel();refreshBootstrap().catch(err=>showError(`初始化失败：${err.message}`));syncExampleTemplateState();updateUploadHint()}
@@ -205,6 +207,7 @@
       els.sourceUploads.addEventListener("change",updateUploadHint);
       els.imageUploads.addEventListener("change",updateUploadHint);
       els.exampleReference.addEventListener("change",syncExampleTemplateState);
+      els.templateName.addEventListener("change",syncExampleTemplateState);
       els.downloadPptBtn.addEventListener("click",()=>downloadNativePpt());
     }
 
@@ -259,15 +262,25 @@
     function useExampleReference(name){els.exampleReference.value=name;syncExampleTemplateState()}
     function syncExampleTemplateState(){
       const hasExample=!!nullable(els.exampleReference.value);
+      const selectedTemplate=nullable(els.templateName.value);
       if(hasExample){
         els.templateName.value="";
         els.templateName.disabled=true;
         els.templateHint.textContent="已选择样例风格参考，模板名会自动让位给样例风格。";
         els.exampleHint.textContent="当前默认使用 example_strong 强参考模式。";
+        els.modeHint.className="upload-hint";
+        els.modeHint.textContent=`当前将按样例强参考生成：${els.exampleReference.value}。不会使用通用自动风格。`;
       }else{
         els.templateName.disabled=false;
         els.templateHint.textContent="";
         els.exampleHint.textContent="";
+        if(selectedTemplate){
+          els.modeHint.className="upload-hint";
+          els.modeHint.textContent=`当前将按模板生成：${selectedTemplate}。未选择样例时，不会套用任何样例。`;
+        }else{
+          els.modeHint.className="upload-hint warn";
+          els.modeHint.textContent="当前未选择样例风格参考，将按自动风格生成，不会套用任何样例。";
+        }
       }
     }
 
@@ -339,7 +352,7 @@
         state.taskId=data.task_id||"";
         state.nativeArtifactName="";
         els.taskIdInput.value=state.taskId;
-        els.submitHint.textContent=`任务已受理，task_id=${state.taskId}`;
+        els.submitHint.textContent=`任务已受理，task_id=${state.taskId}；样例参考=${exampleReference||"无"}；模板=${payload.template_name||"无"}；风格偏好=${payload.prefer_style}`;
         renderResultPending("任务已创建，正在生成 PPT。");
         await refreshTask();
         startPolling();
@@ -415,6 +428,7 @@
       updateUploadHint();
       clearError();
       els.submitHint.textContent="";
+      syncExampleTemplateState();
       renderResultNeutral("任务完成后，这里会显示最终 `native_pptx` 下载按钮。");
       els.taskSummary.textContent="暂无任务。";
       els.taskMeta.innerHTML='<span class="dot"></span><span>未开始</span>';

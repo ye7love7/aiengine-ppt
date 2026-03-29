@@ -74,6 +74,10 @@ def render_slide_svg(slide: dict[str, Any], strategy: dict[str, Any], image_dir:
         return _render_pixel_slide_svg(slide, width, height, theme)
     if style_mode == "yijing_classic":
         return _render_yijing_slide_svg(slide, width, height, theme)
+    if style_mode == "government_modern":
+        return _render_government_slide_svg(slide, width, height, theme, typography, example_profile)
+    if style_mode in {"consulting", "consulting_top"}:
+        return _render_consulting_slide_svg(slide, width, height, theme, typography, style_mode, example_profile)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{canvas["viewbox"]}" width="{width}" height="{height}">',
@@ -155,6 +159,274 @@ def render_slide_svg(slide: dict[str, Any], strategy: dict[str, Any], image_dir:
     parts.append(
         f'<text x="{width - 96}" y="{height - 32}" font-size="14" fill="{theme["muted_text"]}" font-family="Arial, sans-serif">{slide["index"]:02d}</text>'
     )
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
+def _render_government_slide_svg(
+    slide: dict[str, Any],
+    width: int,
+    height: int,
+    theme: dict[str, str],
+    typography: dict[str, Any],
+    example_profile: dict[str, Any],
+) -> str:
+    page_type = slide.get("page_type", "content")
+    title = slide.get("title", "")
+    subtitle = slide.get("subtitle", "")
+    highlight = slide.get("highlight", "")
+    sections = slide.get("sections", [])
+    kpis = slide.get("kpis", [])
+    primary = theme.get("primary", "#0D4EA6")
+    accent = theme.get("accent", "#C00000")
+    secondary = theme.get("secondary_accent", "#1C7ED6")
+    bg = theme.get("background", "#F8FAFF")
+    panel = theme.get("secondary_background", "#FFFFFF")
+    text = theme.get("text", "#22324A")
+    muted = theme.get("muted_text", "#5B6B83")
+    border = theme.get("border", "#D7E0EC")
+    body_size = int(typography.get("body_size") or 18)
+    band_height = max(36, _resolve_title_band_height(example_profile))
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="{bg}"/>',
+        f'<rect x="0" y="0" width="{width}" height="{band_height}" fill="{primary}"/>',
+        f'<rect x="0" y="{band_height}" width="{width}" height="4" fill="{accent}"/>',
+        f'<rect x="48" y="76" width="{width - 96}" height="{height - 120}" fill="{panel}" stroke="{border}" stroke-width="1.5"/>',
+    ]
+
+    if page_type == "cover":
+        parts.append(f'<rect x="92" y="148" width="10" height="{height - 280}" fill="{accent}"/>')
+        parts.append(text_block(130, 210, split_text(title, 16), 34, primary, "700"))
+        if subtitle:
+            parts.append(text_block(132, 322, split_text(subtitle, 28), 20, muted, "500"))
+        if highlight:
+            parts.append(f'<rect x="132" y="{height - 188}" width="420" height="64" fill="{secondary}" fill-opacity="0.12"/>')
+            parts.append(text_block(154, height - 146, split_text(highlight, 28), 18, text, "700"))
+        parts.append(f'<line x1="132" y1="{height - 96}" x2="{width - 132}" y2="{height - 96}" stroke="{border}" stroke-width="1.5"/>')
+
+    elif page_type == "toc":
+        parts.append(text_block(88, 116, split_text(title or "目录", 18), 28, primary, "700"))
+        if subtitle:
+            parts.append(text_block(width - 240, 114, split_text(subtitle, 18), 15, muted, "500"))
+        y = 178
+        for idx, section in enumerate(sections[:6], start=1):
+            box_h = 72
+            x = 92 if idx <= 3 else width // 2 + 18
+            row = idx - 1 if idx <= 3 else idx - 4
+            box_y = y + row * 108
+            box_w = width // 2 - 128
+            parts.append(f'<rect x="{x}" y="{box_y}" width="{box_w}" height="{box_h}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+            parts.append(f'<rect x="{x}" y="{box_y}" width="72" height="{box_h}" fill="{primary}"/>')
+            parts.append(text_block(x + 22, box_y + 46, [f"{idx:02d}"], 24, "#FFFFFF", "700"))
+            parts.append(text_block(x + 94, box_y + 30, split_text(section.get("heading", ""), 16), 18, text, "700"))
+            items = section.get("items", [])
+            if items:
+                parts.append(text_block(x + 94, box_y + 54, split_text(" / ".join(items[:3]), 24), 13, muted, "500"))
+
+    elif page_type in {"chapter", "ending"}:
+        parts.append(f'<rect x="92" y="158" width="{width - 184}" height="{height - 256}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+        parts.append(f'<line x1="92" y1="222" x2="{width - 92}" y2="222" stroke="{accent}" stroke-width="3"/>')
+        parts.append(text_block(126, 210, split_text(title, 18), 34, primary, "700"))
+        if subtitle:
+            parts.append(text_block(126, 286, split_text(subtitle, 32), 19, muted, "500"))
+        if highlight:
+            parts.append(text_block(126, 382, split_text(highlight, 40), 18, accent, "600"))
+        if page_type == "ending" and kpis:
+            x = 126
+            for kpi in kpis[:3]:
+                parts.append(f'<rect x="{x}" y="{height - 178}" width="230" height="70" fill="{panel}" stroke="{border}" stroke-width="1"/>')
+                parts.append(text_block(x + 18, height - 140, split_text(kpi.get("value", ""), 12), 20, primary, "700"))
+                parts.append(text_block(x + 18, height - 114, split_text(kpi.get("label", ""), 18), 13, muted, "500"))
+                x += 248
+
+    else:
+        parts.append(text_block(84, 118, split_text(title, 22), 28, primary, "700"))
+        if subtitle:
+            parts.append(text_block(84, 156, split_text(subtitle, 32), 16, muted, "500"))
+        parts.append(f'<line x1="84" y1="178" x2="{width - 84}" y2="178" stroke="{accent}" stroke-width="2"/>')
+        if highlight:
+            parts.append(f'<rect x="{width - 360}" y="96" width="248" height="54" fill="{accent}" fill-opacity="0.08"/>')
+            parts.append(text_block(width - 338, 128, split_text(highlight, 18), 15, accent, "700"))
+
+        if sections:
+            lead = sections[0]
+            parts.append(f'<rect x="84" y="206" width="{width - 168}" height="118" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+            parts.append(f'<rect x="84" y="206" width="8" height="118" fill="{accent}"/>')
+            parts.append(text_block(110, 242, split_text(lead.get("heading", ""), 20), 20, primary, "700"))
+            bullet_y = 274
+            for item in lead.get("items", [])[:4]:
+                parts.append(f'<rect x="110" y="{bullet_y - 12}" width="8" height="8" fill="{secondary}"/>')
+                parts.append(text_block(128, bullet_y, split_text(item, 42), body_size, text, "500"))
+                bullet_y += body_size + 18
+
+        small_y = 344
+        for idx, section in enumerate(sections[1:5], start=1):
+            col = 0 if idx % 2 == 1 else 1
+            row = (idx - 1) // 2
+            x = 84 + col * ((width - 184) // 2 + 16)
+            y = small_y + row * 130
+            box_w = (width - 184) // 2
+            parts.append(f'<rect x="{x}" y="{y}" width="{box_w}" height="110" fill="{panel}" stroke="{border}" stroke-width="1"/>')
+            parts.append(f'<rect x="{x}" y="{y}" width="8" height="110" fill="{primary if idx > 2 else secondary}"/>')
+            parts.append(text_block(x + 24, y + 32, split_text(section.get("heading", ""), 18), 18, primary, "700"))
+            items = section.get("items", [])[:3]
+            if items:
+                parts.append(text_block(x + 24, y + 60, split_text(" / ".join(items), 28), 14, muted, "500"))
+
+        if kpis:
+            x = 84
+            y = height - 104
+            for kpi in kpis[:3]:
+                parts.append(f'<rect x="{x}" y="{y}" width="210" height="54" fill="{panel}" stroke="{border}" stroke-width="1"/>')
+                parts.append(text_block(x + 16, y + 24, split_text(kpi.get("value", ""), 12), 18, primary, "700"))
+                parts.append(text_block(x + 16, y + 44, split_text(kpi.get("label", ""), 18), 12, muted, "500"))
+                x += 228
+
+    parts.append(f'<text x="{width - 78}" y="{height - 24}" font-size="16" fill="{muted}" font-family="Arial, sans-serif">{slide["index"]:02d}</text>')
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
+def _render_consulting_slide_svg(
+    slide: dict[str, Any],
+    width: int,
+    height: int,
+    theme: dict[str, str],
+    typography: dict[str, Any],
+    style_mode: str,
+    example_profile: dict[str, Any],
+) -> str:
+    page_type = slide.get("page_type", "content")
+    title = slide.get("title", "")
+    subtitle = slide.get("subtitle", "")
+    highlight = slide.get("highlight", "")
+    sections = slide.get("sections", [])
+    kpis = slide.get("kpis", [])
+    archetype = slide.get("example_archetype") or ""
+    primary = theme.get("primary", "#17375E")
+    accent = theme.get("accent", "#4A90D9")
+    secondary = theme.get("secondary_accent", accent)
+    bg = theme.get("background", "#F8FAFC")
+    panel = theme.get("secondary_background", "#FFFFFF")
+    text = theme.get("text", "#334155")
+    muted = theme.get("muted_text", "#64748B")
+    border = theme.get("border", "#E2E8F0")
+    title_size = 30 if style_mode == "consulting_top" else 28
+    body_size = int(typography.get("body_size") or 18)
+    title_band_height = max(44, int(_resolve_title_band_height(example_profile)))
+    frame_style = ((example_profile.get("visual_rules") or {}).get("frame_style") or "sharp").lower()
+    panel_radius = 0 if frame_style == "sharp" else 10
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="{bg}"/>',
+        f'<rect x="0" y="0" width="{width}" height="{title_band_height}" fill="{primary}"/>',
+    ]
+
+    if page_type == "cover":
+        parts.append(f'<rect x="82" y="118" width="{width - 164}" height="{height - 180}" rx="{panel_radius}" fill="{panel}" stroke="{border}" stroke-width="1.5"/>')
+        parts.append(f'<rect x="82" y="118" width="8" height="{height - 180}" fill="{accent}"/>')
+        parts.append(text_block(132, 210, split_text(title, 18), title_size + 8, primary, "700"))
+        if subtitle:
+            parts.append(text_block(132, 330, split_text(subtitle, 34), 20, muted, "500"))
+        if highlight:
+            parts.append(f'<rect x="132" y="{height - 180}" width="{width - 264}" height="64" rx="{panel_radius}" fill="{accent}" fill-opacity="0.1"/>')
+            parts.append(text_block(154, height - 138, split_text(highlight, 36), 18, text, "700"))
+
+    elif page_type == "toc":
+        parts.append(text_block(84, 96, split_text(title or "目录", 18), title_size, "#FFFFFF", "700"))
+        if subtitle:
+            parts.append(text_block(width - 240, 94, split_text(subtitle, 18), 16, "#D9E3F0", "500"))
+        parts.append(f'<rect x="70" y="132" width="{width - 140}" height="{height - 200}" rx="{panel_radius}" fill="{panel}" stroke="{border}" stroke-width="1.5"/>')
+        column_x = [106, width // 2 + 14]
+        y = 194
+        for idx, section in enumerate(sections[:6], start=1):
+            col = 0 if idx <= 3 else 1
+            row = idx - 1 if col == 0 else idx - 4
+            box_y = y + row * 126
+            x = column_x[col]
+            parts.append(f'<rect x="{x}" y="{box_y}" width="{width//2 - 130}" height="92" rx="{panel_radius}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+            parts.append(f'<rect x="{x}" y="{box_y}" width="88" height="92" fill="{primary}"/>')
+            parts.append(text_block(x + 26, box_y + 56, [f"{idx:02d}"], 30, "#FFFFFF", "700"))
+            parts.append(text_block(x + 112, box_y + 34, split_text(section.get("heading", ""), 16), 20, text, "700"))
+            items = section.get("items", [])
+            if items:
+                parts.append(text_block(x + 112, box_y + 62, split_text(" / ".join(items[:3]), 26), 14, muted, "500"))
+
+    elif page_type == "ending":
+        parts.append(f'<rect x="72" y="150" width="{width - 144}" height="{height - 240}" rx="{panel_radius}" fill="{panel}" stroke="{border}" stroke-width="1.5"/>')
+        parts.append(f'<line x1="72" y1="226" x2="{width - 72}" y2="226" stroke="{accent}" stroke-width="3"/>')
+        parts.append(text_block(120, 214, split_text(title, 18), 36, primary, "700"))
+        if subtitle:
+            parts.append(text_block(120, 286, split_text(subtitle, 28), 20, muted, "500"))
+        if highlight:
+            parts.append(text_block(120, 390, split_text(highlight, 40), 18, accent, "600"))
+        if kpis:
+            x = 120
+            for kpi in kpis[:3]:
+                parts.append(f'<rect x="{x}" y="{height - 180}" width="250" height="76" rx="{panel_radius}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+                parts.append(text_block(x + 18, height - 138, split_text(kpi.get("value", ""), 12), 22, primary, "700"))
+                parts.append(text_block(x + 18, height - 110, split_text(kpi.get("label", ""), 18), 14, muted, "500"))
+                x += 272
+
+    else:
+        parts.append(text_block(74, 94, split_text(title, 22), title_size, "#FFFFFF", "700"))
+        if subtitle:
+            parts.append(text_block(width - 380, 92, split_text(subtitle, 30), 15, "#D9E3F0", "500"))
+        parts.append(f'<rect x="64" y="128" width="{width - 128}" height="{height - 176}" rx="{panel_radius}" fill="{panel}" stroke="{border}" stroke-width="1.5"/>')
+        label = highlight or subtitle or ""
+        if label:
+            parts.append(f'<rect x="88" y="156" width="280" height="40" rx="{panel_radius}" fill="{accent}" fill-opacity="0.1"/>')
+            parts.append(text_block(106, 183, split_text(label, 20), 16, accent, "700"))
+
+        if archetype == "content_panel" or style_mode == "consulting_top":
+            left_x, right_x = 88, width // 2 + 12
+            panel_w = width // 2 - 116
+            panel_h = height - 266
+            if sections:
+                lead = sections[0]
+                parts.append(f'<rect x="{left_x}" y="214" width="{panel_w}" height="{panel_h}" rx="{panel_radius}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+                parts.append(text_block(left_x + 24, 252, split_text(lead.get("heading", ""), 18), 22, primary, "700"))
+                bullet_y = 292
+                for item in lead.get("items", [])[:5]:
+                    parts.append(f'<rect x="{left_x + 24}" y="{bullet_y - 14}" width="10" height="10" fill="{accent}"/>')
+                    parts.append(text_block(left_x + 46, bullet_y, split_text(item, 22), body_size, text, "500"))
+                    bullet_y += body_size + 22
+            stack_y = 214
+            for idx, section in enumerate(sections[1:4], start=1):
+                box_h = 96
+                parts.append(f'<rect x="{right_x}" y="{stack_y}" width="{panel_w}" height="{box_h}" rx="{panel_radius}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+                color = accent if idx == 1 else (secondary if idx == 2 else primary)
+                parts.append(f'<rect x="{right_x}" y="{stack_y}" width="8" height="{box_h}" fill="{color}"/>')
+                parts.append(text_block(right_x + 22, stack_y + 34, split_text(section.get("heading", ""), 18), 18, text, "700"))
+                items = " / ".join(section.get("items", [])[:3])
+                if items:
+                    parts.append(text_block(right_x + 22, stack_y + 62, split_text(items, 28), 14, muted, "500"))
+                stack_y += box_h + 18
+        else:
+            y = 214
+            for idx, section in enumerate(sections[:4], start=1):
+                box_h = 96
+                parts.append(f'<rect x="88" y="{y}" width="{width - 176}" height="{box_h}" rx="{panel_radius}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+                parts.append(f'<rect x="88" y="{y}" width="112" height="{box_h}" fill="{primary}"/>')
+                parts.append(text_block(118, y + 56, [f"{idx:02d}"], 28, "#FFFFFF", "700"))
+                parts.append(text_block(224, y + 34, split_text(section.get("heading", ""), 18), 20, text, "700"))
+                items = " / ".join(section.get("items", [])[:4])
+                if items:
+                    parts.append(text_block(224, y + 64, split_text(items, 40), 14, muted, "500"))
+                y += box_h + 18
+
+        if kpis:
+            x = 88
+            kpi_y = height - 128
+            for kpi in kpis[:3]:
+                parts.append(f'<rect x="{x}" y="{kpi_y}" width="220" height="64" rx="{panel_radius}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
+                parts.append(text_block(x + 18, kpi_y + 28, split_text(kpi.get("value", ""), 12), 20, primary, "700"))
+                parts.append(text_block(x + 18, kpi_y + 50, split_text(kpi.get("label", ""), 18), 12, muted, "500"))
+                x += 240
+
+    parts.append(f'<text x="{width - 78}" y="{height - 24}" font-size="16" fill="{muted}" font-family="Arial, sans-serif">{slide["index"]:02d}</text>')
     parts.append("</svg>")
     return "\n".join(parts)
 

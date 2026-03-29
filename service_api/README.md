@@ -4,6 +4,9 @@
 
 ```bash
 uvicorn service_api.main:app --host 0.0.0.0 --port 8000
+
+# 然后在浏览器打开同源页面，避免直接双击本地 frontend.html 带来的 Origin:null 文件上传问题
+# http://127.0.0.1:8000/frontend
 ```
 
 ## Frontend

@@ -43,6 +43,16 @@ async def startup_event() -> None:
     STORE._ensure_roots()
 
 
+@app.get("/")
+async def root_frontend() -> FileResponse:
+    return FileResponse(SETTINGS.repo_root / "service_api" / "frontend.html")
+
+
+@app.get("/frontend")
+async def frontend_page() -> FileResponse:
+    return FileResponse(SETTINGS.repo_root / "service_api" / "frontend.html")
+
+
 @app.post("/api/v1/tasks", response_model=TaskCreateResponse)
 async def create_task(request: Request) -> TaskCreateResponse:
     form: FormData | None = None
@@ -120,7 +130,7 @@ async def list_materials() -> JSONResponse:
 
 @app.get("/api/v1/examples")
 async def get_examples() -> JSONResponse:
-    return JSONResponse({"examples": list_examples()})
+    return JSONResponse({"examples": await asyncio.to_thread(list_examples)})
 
 
 @app.get("/api/v1/templates")
@@ -131,7 +141,7 @@ async def get_templates() -> JSONResponse:
 @app.get("/api/v1/examples/{example_name}")
 async def get_example(example_name: str) -> JSONResponse:
     try:
-        payload = get_example_detail(example_name)
+        payload = await asyncio.to_thread(get_example_detail, example_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Example not found") from exc
     return JSONResponse(payload)
@@ -140,7 +150,7 @@ async def get_example(example_name: str) -> JSONResponse:
 @app.get("/api/v1/examples/{example_name}/download/{artifact_name}")
 async def download_example_artifact(example_name: str, artifact_name: str) -> FileResponse:
     try:
-        archive_path = create_example_download_bundle(example_name, artifact_name)
+        archive_path = await asyncio.to_thread(create_example_download_bundle, example_name, artifact_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Example artifact not found") from exc
     return FileResponse(path=archive_path, filename=archive_path.name)
