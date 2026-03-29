@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from service_api.main import app  # noqa: E402
 from service_api.config import SETTINGS  # noqa: E402
 from service_api.pipeline import _normalize_template_name  # noqa: E402
+from service_api.rendering import render_slide_svg  # noqa: E402
 
 
 class ServiceApiTests(unittest.TestCase):
@@ -156,6 +157,36 @@ class ServiceApiTests(unittest.TestCase):
         payload = detail_response.json()
         self.assertEqual(payload["style_profile"]["style_tag"], "pixel_retro")
         self.assertEqual(payload["style_profile"]["recommended_template"], "pixel_retro")
+
+    def test_pixel_renderer_moves_subtitle_below_multi_line_title(self) -> None:
+        slide = {
+            "index": 5,
+            "page_type": "content",
+            "title": "MODULE 03: COMBAT SUPPORT",
+            "subtitle": "Battle support and governance",
+            "sections": [{"heading": "A", "items": ["x"]}, {"heading": "B", "items": ["y"]}],
+            "highlight": "",
+            "chart_type": "comparison",
+        }
+        strategy = {
+            "canvas_format": "ppt169",
+            "theme": {
+                "background": "#0D1117",
+                "secondary_background": "#161B22",
+                "primary": "#39FF14",
+                "accent": "#00D4FF",
+                "secondary_accent": "#FF2E97",
+                "text": "#E6EDF3",
+                "muted_text": "#8B949E",
+                "border": "#30363D",
+            },
+            "typography": {"title_font": "Microsoft YaHei", "body_font": "Microsoft YaHei", "emphasis_font": "SimHei", "body_size": 20},
+            "resolved_style_mode": "pixel_retro",
+            "example_style_profile": {},
+        }
+        svg = render_slide_svg(slide, strategy, SETTINGS.materials_images_root)
+        self.assertIn('y="182"', svg)
+        self.assertIn("MODULE 03:", svg)
 
     def test_create_task_rejects_unknown_example_reference(self) -> None:
         payload = {

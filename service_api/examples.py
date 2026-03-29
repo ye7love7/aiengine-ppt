@@ -105,6 +105,7 @@ def extract_example_style_profile(example_dir: Path) -> dict[str, Any]:
         "typography": typography,
         "layout_tags": svg_profile["layout_tags"],
         "page_layout_map": svg_profile["page_layout_map"],
+        "page_archetypes": svg_profile["page_archetypes"],
         "visual_rules": svg_profile["visual_rules"],
         "can_extract_svg": svg_profile["can_extract_svg"],
         "fallback_reason": svg_profile["fallback_reason"],
@@ -302,6 +303,7 @@ def _extract_svg_profile(svg_dir: Path) -> dict[str, Any]:
         return {
             "layout_tags": [],
             "page_layout_map": {},
+            "page_archetypes": {},
             "visual_rules": {},
             "can_extract_svg": False,
             "fallback_reason": "svg_final/svg_output missing",
@@ -309,6 +311,7 @@ def _extract_svg_profile(svg_dir: Path) -> dict[str, Any]:
 
     layout_tags: Counter[str] = Counter()
     page_layout_map: dict[str, dict[str, Any]] = {}
+    page_archetypes: dict[str, str] = {}
     title_band_heights: list[float] = []
     fill_colors: Counter[str] = Counter()
     rect_radii: list[float] = []
@@ -349,10 +352,15 @@ def _extract_svg_profile(svg_dir: Path) -> dict[str, Any]:
         if any("toc" in svg_path.stem.lower() or "目录" in svg_path.stem for _ in [0]):
             layout_tags["toc"] += 1
 
+        page_kind = _infer_page_kind(svg_path.stem)
+        archetype = _infer_svg_archetype(svg_path.stem, rect_count, text_count)
+        page_archetypes[page_kind] = archetype
         page_layout_map[svg_path.stem] = {
             "rect_count": rect_count,
             "text_count": text_count,
             "title_band_height": max(bands) if bands else 0,
+            "page_kind": page_kind,
+            "archetype": archetype,
         }
 
     top_colors = [color for color, _ in fill_colors.most_common(4)]
@@ -362,6 +370,7 @@ def _extract_svg_profile(svg_dir: Path) -> dict[str, Any]:
     return {
         "layout_tags": [tag for tag, _ in layout_tags.most_common(4)],
         "page_layout_map": page_layout_map,
+        "page_archetypes": page_archetypes,
         "visual_rules": {
             "dominant_colors": top_colors,
             "background_mode": "dark" if top_colors and top_colors[0] in {"#0D1117", "#111827", "#0F172A"} else "light",
@@ -372,3 +381,31 @@ def _extract_svg_profile(svg_dir: Path) -> dict[str, Any]:
         "can_extract_svg": bool(page_layout_map),
         "fallback_reason": "" if page_layout_map else "svg parsing yielded no usable structural features",
     }
+
+
+def _infer_page_kind(stem: str) -> str:
+    lowered = stem.lower()
+    if "cover" in lowered:
+        return "cover"
+    if "navigation" in lowered or "toc" in lowered or "目录" in stem:
+        return "toc"
+    if "summary" in lowered or "ending" in lowered or "conclusion" in lowered:
+        return "ending"
+    return "content"
+
+
+def _infer_svg_archetype(stem: str, rect_count: int, text_count: int) -> str:
+    lowered = stem.lower()
+    if "cover" in lowered:
+        return "pixel_cover_hud"
+    if "navigation" in lowered or "toc" in lowered:
+        return "pixel_navigation_list"
+    if "summary" in lowered or "ending" in lowered:
+        return "pixel_summary_board"
+    if "vs" in lowered or "compare" in lowered:
+        return "pixel_compare_board"
+    if rect_count >= 10:
+        return "pixel_triple_panel"
+    if text_count >= 10:
+        return "pixel_dense_panel"
+    return "pixel_dual_panel"

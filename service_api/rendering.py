@@ -161,14 +161,19 @@ def _render_pixel_slide_svg(slide: dict[str, Any], width: int, height: int, them
     title = slide.get("title", "")
     subtitle = slide.get("subtitle", "")
     sections = slide.get("sections", [])
+    title_lines = split_text(title, 18)
+    title_y = 88
+    title_size = 34 if len(title_lines) <= 1 else 28
+    subtitle_y = title_y + (len(title_lines) * int(title_size * 1.45)) + 14
+    archetype = slide.get("example_archetype") or _infer_pixel_archetype_from_slide(slide, sections)
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
         f'<rect x="0" y="0" width="{width}" height="{height}" fill="{theme["background"]}"/>',
         f'<rect x="0" y="64" width="{width}" height="2" fill="{theme["border"]}" fill-opacity="0.5"/>',
-        text_block(84, 88, split_text(title, 18), 34, theme["primary"], "700"),
+        text_block(84, title_y, title_lines, title_size, theme["primary"], "700"),
     ]
     if subtitle:
-        parts.append(text_block(84, 132, split_text(subtitle, 34), 18, theme["muted_text"], "500"))
+        parts.append(text_block(84, subtitle_y, split_text(subtitle, 34), 18, theme["muted_text"], "500"))
 
     page_type = slide.get("page_type", "content")
     if page_type == "cover":
@@ -184,8 +189,10 @@ def _render_pixel_slide_svg(slide: dict[str, Any], width: int, height: int, them
             parts.append(text_block(122, y + 14, [str(idx)], 30, theme["background"], "700"))
             parts.append(text_block(214, y + 8, split_text(section.get("heading", ""), 28), 22, theme["text"], "700"))
             y += 104
+    elif page_type == "ending":
+        parts.extend(_render_pixel_ending(slide, width, height, theme))
     else:
-        boxes = _pixel_boxes(len(sections) or 1, width, height)
+        boxes = _pixel_boxes_for_archetype(archetype, len(sections) or 1, width, height)
         for box, section in zip(boxes, sections[: len(boxes)]):
             x, y, w, h, color = box
             parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{theme["secondary_background"]}" stroke="{color}" stroke-width="4"/>')
@@ -206,8 +213,19 @@ def _render_pixel_slide_svg(slide: dict[str, Any], width: int, height: int, them
     return "\n".join(parts)
 
 
-def _pixel_boxes(section_count: int, width: int, height: int) -> list[tuple[int, int, int, int, str]]:
+def _pixel_boxes_for_archetype(archetype: str, section_count: int, width: int, height: int) -> list[tuple[int, int, int, int, str]]:
     colors = ["#39FF14", "#00D4FF", "#FF2E97", "#FFD700"]
+    if archetype == "pixel_compare_board":
+        return [
+            (64, 176, 552, 274, colors[0]),
+            (664, 176, 552, 274, colors[2]),
+        ]
+    if archetype == "pixel_triple_panel":
+        return [
+            (48, 176, 382, 262, colors[0]),
+            (450, 176, 382, 262, colors[1]),
+            (852, 176, 382, 262, colors[2]),
+        ]
     if section_count <= 2:
         return [
             (86, 176, 520, 262, colors[0]),
@@ -225,6 +243,31 @@ def _pixel_boxes(section_count: int, width: int, height: int) -> list[tuple[int,
         (70, 392, 520, 188, colors[2]),
         (650, 392, 520, 188, colors[3]),
     ]
+
+
+def _render_pixel_ending(slide: dict[str, Any], width: int, height: int, theme: dict[str, str]) -> list[str]:
+    highlight = slide.get("highlight") or slide.get("speaker_notes") or ""
+    lines = split_text(highlight, 48)[:3]
+    return [
+        f'<rect x="72" y="182" width="{width - 144}" height="170" fill="{theme["secondary_background"]}" stroke="{theme["secondary_accent"]}" stroke-width="4"/>',
+        text_block(108, 244, lines or ["READY TO CONTINUE"], 24, theme["secondary_accent"], "700"),
+        f'<rect x="72" y="404" width="{width - 144}" height="148" fill="{theme["secondary_background"]}" stroke="{theme["primary"]}" stroke-width="4"/>',
+        text_block(108, 468, split_text(slide.get("title", ""), 24), 28, theme["primary"], "700"),
+        text_block(108, 512, split_text(slide.get("subtitle", ""), 42), 18, theme["text"], "500"),
+    ]
+
+
+def _infer_pixel_archetype_from_slide(slide: dict[str, Any], sections: list[dict[str, Any]]) -> str:
+    chart_type = slide.get("chart_type") or ""
+    if slide.get("page_type") == "toc":
+        return "pixel_navigation_list"
+    if slide.get("page_type") == "ending":
+        return "pixel_summary_board"
+    if chart_type == "comparison":
+        return "pixel_compare_board"
+    if len(sections) >= 3:
+        return "pixel_triple_panel"
+    return "pixel_dual_panel"
 
 
 def _resolve_title_band_height(example_profile: dict[str, Any]) -> int:

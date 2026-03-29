@@ -504,14 +504,17 @@ def _normalize_typography(typography: dict[str, Any], locked_typography: Optiona
 
 def _normalize_pages(strategy: dict[str, Any]) -> list[dict[str, Any]]:
     raw_pages = strategy.get("pages") or []
+    example_profile = strategy.get("example_style_profile") or {}
+    example_page_archetypes = example_profile.get("page_archetypes") or {}
     normalized: list[dict[str, Any]] = []
     for index, page in enumerate(raw_pages, start=1):
         title = page.get("title") or f"Slide {index}"
         stem_base = page.get("file_stem") or ("cover" if index == 1 else slugify(title))
+        page_type = page.get("page_type") or ("cover" if index == 1 else "content")
         normalized.append(
             {
                 "index": index,
-                "page_type": page.get("page_type") or ("cover" if index == 1 else "content"),
+                "page_type": page_type,
                 "title": title,
                 "subtitle": page.get("subtitle") or "",
                 "layout": page.get("layout") or "content",
@@ -520,6 +523,7 @@ def _normalize_pages(strategy: dict[str, Any]) -> list[dict[str, Any]]:
                 "chart_type": page.get("chart_type") or "",
                 "image_filename": page.get("image_filename") or "",
                 "file_stem": f"{index:02d}_{slugify(stem_base)}",
+                "example_archetype": example_page_archetypes.get(page_type, ""),
             }
         )
     if not normalized:
