@@ -169,3 +169,10 @@ PERSONAL_NOTES.md
 # Use cloud sync (iCloud/Dropbox) for backup and multi-device access
 projects/*
 !projects/README.md
+service_data/jobs/*
+service_data/uploads/*
+!service_data/materials/
+!service_data/materials/docs/
+!service_data/materials/images/
+!service_data/materials/docs/.gitkeep
+!service_data/materials/images/.gitkeep

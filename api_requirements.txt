@@ -1,0 +1,31 @@
+# Offline PPT Master FastAPI service requirements
+#
+# This file is for API deployment. It is intentionally narrower than the
+# repository-wide requirements.txt.
+#
+# Install with:
+#   pip install -r api_requirements.txt
+#
+# Notes:
+# - Pandoc is still a system dependency if you want DOCX/EPUB/LaTeX imports.
+# - If you only accept Markdown/TXT uploads, Pandoc is not required.
+
+# API service
+fastapi>=0.115.0
+uvicorn>=0.30.0
+python-multipart>=0.0.9
+
+# LLM client
+openai>=1.0.0
+
+# Data models
+pydantic>=2.0.0
+
+# Image inspection for user-provided assets
+Pillow>=9.0.0
+
+# Generation/export pipeline
+python-pptx>=0.6.21
+svglib>=1.5.0
+reportlab>=4.0.0
+PyMuPDF>=1.23.0

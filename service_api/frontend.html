@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline PPT Master 控制台</title>
+  <style>
+    :root{--bg:#f5efe6;--paper:rgba(255,250,244,.84);--line:rgba(55,67,54,.14);--ink:#1d2420;--muted:#68746b;--accent:#be5f3f;--accent2:#2f6253;--ok:#267b57;--warn:#c98124;--bad:#ba4138;--shadow:0 18px 54px rgba(42,33,24,.12);--radius:22px}
+    *{box-sizing:border-box}body{margin:0;font-family:"Microsoft YaHei","PingFang SC",sans-serif;color:var(--ink);background:radial-gradient(circle at top left,#fff7ee,transparent 30%),linear-gradient(180deg,#f8f3ea,#eee4d6)}
+    button,input,select,textarea{font:inherit}button{cursor:pointer}a{color:inherit}
+    .shell{max-width:1460px;margin:0 auto;padding:24px;display:grid;grid-template-columns:440px minmax(0,1fr);gap:22px}.stack{display:grid;gap:18px}.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(18px)}.hero,.section{padding:22px}
+    .hero h1{margin:0 0 10px;font:600 38px/1.05 Georgia,"Times New Roman",serif}.hero p,.hint,.tiny{margin:0;color:var(--muted);line-height:1.7}.tiny{font-size:12px}
+    .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.section h2{margin:0;font-size:18px}.status{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(47,98,83,.08);color:var(--accent2);font-size:13px;font-weight:700}.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+    .field{display:grid;gap:8px}.field label{font-size:13px;color:var(--muted);font-weight:600}.row{display:grid;gap:12px}.row.two{grid-template-columns:1fr 1fr}.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    input,select,textarea{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.82);color:var(--ink);outline:none}textarea{min-height:82px;resize:vertical}input:focus,select:focus,textarea:focus{border-color:rgba(190,95,63,.45);box-shadow:0 0 0 4px rgba(190,95,63,.1)}
+    button{border:none;border-radius:16px;padding:12px 16px;transition:.18s ease}.primary{background:linear-gradient(135deg,var(--accent),#d98561);color:#fff}.secondary{background:#fff;border:1px solid var(--line);color:var(--ink)}.ghost{background:rgba(47,98,83,.08);color:var(--accent2)}.danger{background:rgba(186,65,56,.1);color:var(--bad)}button:hover{transform:translateY(-1px)}button:disabled{opacity:.5;transform:none}
+    .seg{display:flex;padding:4px;background:rgba(47,98,83,.08);border-radius:18px}.seg button{flex:1;background:transparent;color:var(--muted)}.seg button.active{background:#fff;color:var(--ink);box-shadow:0 10px 24px rgba(36,42,37,.08)}
+    .chip-wrap{display:flex;flex-wrap:wrap;gap:10px}.chip{padding:8px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:12px}.chip.sel{border-color:rgba(190,95,63,.45);background:rgba(190,95,63,.08);color:var(--accent)}
+    .list,.timeline,.artifacts,.log{display:grid;gap:10px}.scroll{max-height:280px;overflow:auto;padding-right:4px}.item,.artifact,.stage,.log-entry{background:rgba(255,255,255,.68);border:1px solid var(--line);border-radius:16px}.item,.artifact{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px}.item-main,.artifact-main{min-width:0}.item b,.artifact b{display:block;word-break:break-all}.item small,.artifact small{color:var(--muted);line-height:1.6}
+    .stage{display:flex;gap:12px;padding:12px 14px}.stage-index{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:700}.stage.active{background:rgba(190,95,63,.08);border-color:rgba(190,95,63,.35)}.stage.done{background:rgba(38,123,87,.08);border-color:rgba(38,123,87,.35)}.stage.fail{background:rgba(186,65,56,.08);border-color:rgba(186,65,56,.35)}
+    .artifact-actions{display:flex;gap:8px;flex-wrap:wrap}.empty{padding:18px;border:1px dashed var(--line);border-radius:18px;color:var(--muted);text-align:center}.code{font-family:Consolas,monospace;background:rgba(47,98,83,.08);padding:2px 6px;border-radius:8px}
+    .log{max-height:280px;overflow:auto}.log-entry{padding:10px 12px;font-size:13px;line-height:1.6}.example-header{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.example-metrics{display:flex;gap:8px;flex-wrap:wrap}.metric{padding:4px 8px;border-radius:999px;background:rgba(47,98,83,.08);font-size:12px;color:var(--accent2)}
+    .preview-box{padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.68)}.preview-box pre{margin:0;white-space:pre-wrap;word-break:break-word;line-height:1.7;font-size:13px;color:var(--ink);max-height:240px;overflow:auto}.meta-list{display:grid;gap:8px}.meta-item{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid var(--line)}.meta-item strong{font-size:13px}.meta-item span{font-size:13px;color:var(--muted);text-align:right;word-break:break-all}
+    .upload-hint{padding:12px 14px;border-radius:14px;border:1px dashed var(--line);background:rgba(255,255,255,.62);color:var(--muted);font-size:13px;line-height:1.7}.upload-hint.warn{border-color:rgba(201,129,36,.35);background:rgba(201,129,36,.08);color:#8a5a10}
+    .error-banner{display:none;padding:12px 14px;border-radius:14px;border:1px solid rgba(186,65,56,.28);background:rgba(186,65,56,.08);color:var(--bad);font-size:13px;line-height:1.7}
+    @media (max-width:1140px){.shell{grid-template-columns:1fr}}@media (max-width:760px){.row.two,.split{grid-template-columns:1fr}.shell{padding:16px}.hero h1{font-size:30px}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="stack">
+      <section class="card hero">
+        <h1>Offline PPT Master 控制台</h1>
+        <p>单页管理台，覆盖素材浏览、样例库浏览、按样例风格创建任务、异步轮询、取消任务和产物下载。</p>
+      </section>
+      <section class="card section">
+        <div class="section-head"><h2>服务配置</h2><span class="status"><span class="dot"></span><span id="apiLabel">未连接</span></span></div>
+        <div class="field"><label for="baseUrl">API Base URL</label><input id="baseUrl" placeholder="例如 http://127.0.0.1:8000"></div>
+        <div class="split"><button class="primary" id="saveBaseUrlBtn">保存配置</button><button class="secondary" id="refreshAllBtn">刷新素材与样例</button></div>
+        <p class="hint">页面会把地址缓存到浏览器本地。接口默认不要求前端显式传 Bearer Token。</p>
+      </section>
+      <section class="card section">
+        <div class="section-head"><h2>创建任务</h2><button class="ghost" id="clearFormBtn">重置表单</button></div>
+        <div class="seg"><button class="active" data-mode="path">目录引用</button><button data-mode="upload">文件上传</button></div>
+        <div class="row two" style="margin-top:14px"><div class="field"><label for="projectName">项目名</label><input id="projectName" placeholder="例如 q3_report"></div><div class="field"><label for="canvasFormat">画布格式</label><select id="canvasFormat"><option value="ppt169">ppt169</option><option value="ppt43">ppt43</option></select></div></div>
+        <div class="row two"><div class="field"><label for="templateName">模板名</label><input id="templateName" placeholder="留空表示自动或无模板"></div><div class="field"><label for="preferStyle">风格偏好</label><select id="preferStyle"><option value="auto">auto</option><option value="general">general</option><option value="consulting">consulting</option><option value="consulting_top">consulting_top</option></select></div></div>
+        <div class="field"><label for="exampleReference">样例风格参考</label><input id="exampleReference" placeholder="可选，填写样例名称或从右侧点击使用"></div>
+        <div class="row two"><div class="field"><label for="audience">受众</label><input id="audience" placeholder="可选"></div><div class="field"><label for="useCase">用途</label><input id="useCase" placeholder="可选"></div></div>
+        <div class="field"><label for="coreMessage">核心信息</label><textarea id="coreMessage" placeholder="可选，用于强调报告目标或结论"></textarea></div>
+        <div class="row two"><div class="field"><label for="notesStyle">备注风格</label><select id="notesStyle"><option value="formal">formal</option><option value="brief">brief</option></select></div><div class="field"><label>输出格式</label><div class="chip-wrap"><button type="button" class="chip sel" data-output="native_pptx">native_pptx</button><button type="button" class="chip sel" data-output="svg_pptx">svg_pptx</button></div></div></div>
+        <div id="pathPanel" class="field"><label for="sourcePaths">源文档相对路径</label><textarea id="sourcePaths" placeholder="每行一个，例如 quarterly/report.md"></textarea><label for="imagePaths">图片相对路径</label><textarea id="imagePaths" placeholder="每行一个，例如 branding/cover.png"></textarea></div>
+        <div id="uploadPanel" class="field" style="display:none"><label for="sourceUploads">上传源文档</label><input id="sourceUploads" type="file" multiple><label for="imageUploads">上传图片</label><input id="imageUploads" type="file" multiple accept="image/*"><div id="uploadHint" class="upload-hint warn">你当前没有上传任何真实文件。请先选择至少一个源文档；如果文件大小为 0 B，也会被视为无效上传。</div></div>
+        <div id="errorBanner" class="error-banner"></div>
+        <div class="split"><button class="primary" id="createTaskBtn">提交任务</button><button class="secondary" id="pollingBtn">开启轮询</button></div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="card section">
+        <div class="section-head"><h2>素材浏览</h2><span class="tiny">点击加入到目录引用输入框</span></div>
+        <div class="split"><div><div class="tiny" style="margin-bottom:8px">文档素材</div><div id="docsList" class="list scroll"><div class="empty">尚未加载</div></div></div><div><div class="tiny" style="margin-bottom:8px">图片素材</div><div id="imagesList" class="list scroll"><div class="empty">尚未加载</div></div></div></div>
+      </section>
+      <section class="card section">
+        <div class="section-head"><h2>样例库</h2><span class="tiny">点击“作为参考”即可写入创建表单</span></div>
+        <div id="examplesList" class="list scroll"><div class="empty">尚未加载</div></div>
+      </section>
+      <section class="card section">
+        <div class="section-head"><h2>样例详情</h2><span class="tiny">展示 design_spec 预览和可下载产物</span></div>
+        <div id="exampleDetailMeta" class="meta-list"><div class="empty">点击“查看详情”后展示</div></div>
+        <div style="height:12px"></div>
+        <div id="exampleDetailArtifacts" class="artifacts"><div class="empty">暂无样例产物</div></div>
+        <div style="height:12px"></div>
+        <div class="preview-box"><pre id="exampleDetailPreview">暂无 design_spec 预览</pre></div>
+      </section>
+      <section class="card section">
+        <div class="section-head"><h2>任务状态</h2><div class="artifact-actions"><button class="secondary" id="refreshTaskBtn">刷新状态</button><button class="danger" id="cancelTaskBtn">取消任务</button></div></div>
+        <div class="row two"><div class="field"><label for="taskIdInput">Task ID</label><input id="taskIdInput" placeholder="创建任务后会自动填充"></div><div class="field"><label>当前状态</label><div id="taskMeta" class="status"><span class="dot"></span><span>未开始</span></div></div></div>
+        <div id="taskSummary" class="hint" style="margin:12px 0 16px">暂无任务。</div>
+        <div id="timeline" class="timeline"></div>
+      </section>
+      <section class="card section">
+        <div class="section-head"><h2>产物列表</h2><span class="tiny">文件直接下载，目录自动打包 zip</span></div>
+        <div id="artifacts" class="artifacts"><div class="empty">任务完成后展示产物</div></div>
+      </section>
+      <section class="card section">
+        <div class="section-head"><h2>运行日志</h2><button class="ghost" id="clearLogBtn">清空日志</button></div>
+        <div id="log" class="log"><div class="log-entry">页面已就绪。</div></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const STAGES=["queued","ingest","strategist","executor_svg","executor_notes","postprocess","export","completed"];
+    const state={baseUrl:localStorage.getItem("ppt_api_base_url")||"http://127.0.0.1:8000",sourceMode:"path",taskId:"",timer:null};
+    const $=id=>document.getElementById(id);
+    const els={baseUrl:$("baseUrl"),apiLabel:$("apiLabel"),docsList:$("docsList"),imagesList:$("imagesList"),examplesList:$("examplesList"),exampleReference:$("exampleReference"),exampleDetailMeta:$("exampleDetailMeta"),exampleDetailArtifacts:$("exampleDetailArtifacts"),exampleDetailPreview:$("exampleDetailPreview"),sourcePaths:$("sourcePaths"),imagePaths:$("imagePaths"),sourceUploads:$("sourceUploads"),imageUploads:$("imageUploads"),uploadHint:$("uploadHint"),errorBanner:$("errorBanner"),taskIdInput:$("taskIdInput"),taskMeta:$("taskMeta"),taskSummary:$("taskSummary"),timeline:$("timeline"),artifacts:$("artifacts"),log:$("log"),pathPanel:$("pathPanel"),uploadPanel:$("uploadPanel"),pollingBtn:$("pollingBtn")};
+    init();
+    function init(){els.baseUrl.value=state.baseUrl;bind();renderTimeline("queued","queued");updateApiLabel();refreshAll().catch(err=>appendLog("初始化失败："+err.message,"bad"))}
+    function bind(){
+      document.querySelectorAll(".seg button").forEach(btn=>btn.addEventListener("click",()=>setSourceMode(btn.dataset.mode)));
+      document.querySelectorAll("[data-output]").forEach(btn=>btn.addEventListener("click",()=>btn.classList.toggle("sel")));
+      $("saveBaseUrlBtn").addEventListener("click",()=>{state.baseUrl=normalizeBaseUrl(els.baseUrl.value);els.baseUrl.value=state.baseUrl;localStorage.setItem("ppt_api_base_url",state.baseUrl);updateApiLabel();appendLog("已保存 API 地址："+state.baseUrl,"ok")});
+      $("refreshAllBtn").addEventListener("click",()=>refreshAll());
+      $("createTaskBtn").addEventListener("click",()=>createTask());
+      $("refreshTaskBtn").addEventListener("click",()=>refreshTask());
+      $("cancelTaskBtn").addEventListener("click",()=>cancelTask());
+      $("pollingBtn").addEventListener("click",()=>togglePolling());
+      $("clearFormBtn").addEventListener("click",clearForm);
+      $("clearLogBtn").addEventListener("click",()=>els.log.innerHTML='<div class="log-entry">日志已清空。</div>');
+      els.taskIdInput.addEventListener("change",()=>state.taskId=els.taskIdInput.value.trim());
+      els.sourceUploads.addEventListener("change",updateUploadHint);
+      els.imageUploads.addEventListener("change",updateUploadHint);
+    }
+    async function refreshAll(){await Promise.all([loadMaterials(),loadExamples()])}
+    function normalizeBaseUrl(v){v=(v||"").trim();if(!v)return"";return(/^https?:\/\//i.test(v)?v:`http://${v}`).replace(/\/$/,"")}
+    function setSourceMode(mode){state.sourceMode=mode;document.querySelectorAll(".seg button").forEach(btn=>btn.classList.toggle("active",btn.dataset.mode===mode));els.pathPanel.style.display=mode==="path"?"grid":"none";els.uploadPanel.style.display=mode==="upload"?"grid":"none";if(mode==="upload")updateUploadHint();appendLog("切换输入模式："+(mode==="path"?"目录引用":"文件上传"))}
+    function updateApiLabel(){els.apiLabel.textContent=normalizeBaseUrl(els.baseUrl.value)||"未配置"}
+    async function apiFetch(path,options={}){const res=await fetch(`${normalizeBaseUrl(els.baseUrl.value)}${path}`,options);if(!res.ok){let msg=`HTTP ${res.status}`;try{const data=await res.json();msg=data.detail||data.message||JSON.stringify(data)}catch{}showError(msg);throw new Error(msg)}const type=res.headers.get("content-type")||"";return type.includes("application/json")?res.json():res.blob()}
+    async function loadMaterials(){const data=await apiFetch("/api/v1/materials");renderFileList("docsList",data.docs||[],"docs");renderFileList("imagesList",data.images||[],"images");appendLog(`素材加载完成：文档 ${data.docs?.length||0}，图片 ${data.images?.length||0}`,"ok")}
+    function renderFileList(target,items,kind){if(!items.length){els[target].innerHTML='<div class="empty">目录中暂无内容</div>';return}els[target].innerHTML=items.map(item=>`<div class="item"><div class="item-main"><b>${escapeHtml(item.path)}</b><small>${formatBytes(item.size_bytes)}</small></div><button class="secondary" data-kind="${kind}" data-path="${escapeHtml(item.path)}">加入</button></div>`).join("");els[target].querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>appendPath(btn.dataset.kind,btn.dataset.path)))}
+    function appendPath(kind,path){const box=kind==="docs"?els.sourcePaths:els.imagePaths;const lines=parseLines(box.value);if(!lines.includes(path))lines.push(path);box.value=lines.join("\n");setSourceMode("path");appendLog(`已添加${kind==="docs"?"文档":"图片"}路径：${path}`)}
+    async function loadExamples(){const data=await apiFetch("/api/v1/examples");const items=data.examples||[];if(!items.length){els.examplesList.innerHTML='<div class="empty">暂无样例</div>';return}els.examplesList.innerHTML=items.map(item=>`<div class="item"><div class="item-main"><div class="example-header"><b>${escapeHtml(item.name)}</b><div class="example-metrics"><span class="metric">${escapeHtml(item.suggested_style)}</span><span class="metric">${item.page_count||0} 页</span></div></div><small>${escapeHtml(item.summary||"无摘要")}<br>${escapeHtml(item.relative_path||"")}</small></div><div class="artifact-actions"><button class="ghost" data-ref="${escapeHtml(item.name)}">作为参考</button><button class="secondary" data-detail="${escapeHtml(item.name)}">查看详情</button><button class="secondary" data-download="${escapeHtml(item.name)}">下载设计稿</button></div></div>`).join("");els.examplesList.querySelectorAll("button[data-ref]").forEach(btn=>btn.addEventListener("click",()=>useExampleReference(btn.dataset.ref)));els.examplesList.querySelectorAll("button[data-detail]").forEach(btn=>btn.addEventListener("click",()=>showExampleDetail(btn.dataset.detail)));els.examplesList.querySelectorAll("button[data-download]").forEach(btn=>btn.addEventListener("click",()=>downloadExampleArtifact(btn.dataset.download,"design_spec")));appendLog(`样例加载完成：${items.length} 个`,"ok")}
+    function useExampleReference(name){els.exampleReference.value=name;appendLog("已选择样例风格参考："+name,"ok")}
+    async function showExampleDetail(name){const data=await apiFetch(`/api/v1/examples/${encodeURIComponent(name)}`);renderExampleDetail(data);const artifacts=(data.artifacts||[]).map(item=>`${item.name}${item.size_bytes?` (${formatBytes(item.size_bytes)})`:""}`).join("，");appendLog(`样例详情：${name}；产物：${artifacts||"无"}`,"ok")}
+    function downloadExampleArtifact(name,artifact){window.open(`${normalizeBaseUrl(els.baseUrl.value)}/api/v1/examples/${encodeURIComponent(name)}/download/${encodeURIComponent(artifact)}`,"_blank");appendLog(`开始下载样例产物：${name} / ${artifact}`)}
+    function renderExampleDetail(data){
+      const example=data.example||{};
+      els.exampleDetailMeta.innerHTML=[
+        metaRow("样例名称",example.name||"-"),
+        metaRow("推荐风格",example.suggested_style||"-"),
+        metaRow("页数",String(example.page_count??"-")),
+        metaRow("图片数",String(example.image_count??"-")),
+        metaRow("相对路径",example.relative_path||"-")
+      ].join("");
+      const artifacts=data.artifacts||[];
+      els.exampleDetailArtifacts.innerHTML=artifacts.length?artifacts.map(item=>`<div class="artifact"><div class="artifact-main"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.relative_path||"")}${item.size_bytes?` · ${formatBytes(item.size_bytes)}`:""}</small></div><div class="artifact-actions"><button class="primary" data-artifact="${escapeHtml(item.name)}" data-example="${escapeHtml(example.name||"")}">下载</button></div></div>`).join(""):'<div class="empty">暂无样例产物</div>';
+      els.exampleDetailArtifacts.querySelectorAll("button[data-artifact]").forEach(btn=>btn.addEventListener("click",()=>downloadExampleArtifact(btn.dataset.example,btn.dataset.artifact)));
+      els.exampleDetailPreview.textContent=(data.preview&&data.preview.design_spec_excerpt)||"暂无 design_spec 预览";
+    }
+    function updateUploadHint(){
+      const sourceFiles=[...els.sourceUploads.files];
+      const imageFiles=[...els.imageUploads.files];
+      const validSourceFiles=sourceFiles.filter(file=>file&&file.size>0);
+      const invalidSourceFiles=sourceFiles.filter(file=>!file||file.size<=0);
+      const validImageFiles=imageFiles.filter(file=>file&&file.size>0);
+      if(!validSourceFiles.length){
+        els.uploadHint.className="upload-hint warn";
+        const invalidText=invalidSourceFiles.length?` 当前有 ${invalidSourceFiles.length} 个 0 B 源文档无效。`:"";
+        els.uploadHint.textContent=`你当前没有上传任何真实文件。请先选择至少一个源文档；如果文件大小为 0 B，也会被视为无效上传。${invalidText}`;
+        return;
+      }
+      els.uploadHint.className="upload-hint";
+      els.uploadHint.textContent=`已选择源文档 ${validSourceFiles.length} 个：${validSourceFiles.map(file=>`${file.name} (${formatBytes(file.size)})`).join("，")}${validImageFiles.length?`；图片 ${validImageFiles.length} 个：${validImageFiles.map(file=>`${file.name} (${formatBytes(file.size)})`).join("，")}`:""}`;
+    }
+    async function createTask(){
+      clearError();
+      const projectName=$("projectName").value.trim();if(!projectName)return fail("请填写项目名");
+      const payload={source_mode:state.sourceMode,project_name:projectName,canvas_format:$("canvasFormat").value,template_name:nullable($("templateName").value),example_reference:nullable($("exampleReference").value),audience:nullable($("audience").value),use_case:nullable($("useCase").value),core_message:nullable($("coreMessage").value),prefer_style:$("preferStyle").value,notes_style:$("notesStyle").value,output_formats:getOutputs()};
+      appendLog("正在创建任务...");
+      let data;
+      if(state.sourceMode==="path"){const sourceFiles=parseLines(els.sourcePaths.value);if(!sourceFiles.length)return fail("至少填写一个源文档路径");data=await apiFetch("/api/v1/tasks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,source_files:sourceFiles,image_files:parseLines(els.imagePaths.value)})})}
+      else{const sourceFiles=[...els.sourceUploads.files].filter(file=>file&&file.size>0);const imageFiles=[...els.imageUploads.files].filter(file=>file&&file.size>0);if(!sourceFiles.length){updateUploadHint();return fail("你当前没有上传任何真实文件");}appendLog(`即将发送上传文件：源文档 ${sourceFiles.length} 个，图片 ${imageFiles.length} 个`);const fd=new FormData();Object.entries(payload).forEach(([k,v])=>{if(v!==null&&v!==undefined)fd.append(k,Array.isArray(v)?JSON.stringify(v):v)});sourceFiles.forEach(file=>fd.append("source_files",file));imageFiles.forEach(file=>fd.append("image_files",file));data=await apiFetch("/api/v1/tasks",{method:"POST",body:fd})}
+      state.taskId=data.task_id||"";els.taskIdInput.value=state.taskId;appendLog("任务已创建："+state.taskId,"ok");await refreshTask();startPolling();
+    }
+    async function refreshTask(){const taskId=(els.taskIdInput.value||state.taskId).trim();if(!taskId)return fail("请输入或先创建 task_id");state.taskId=taskId;const data=await apiFetch(`/api/v1/tasks/${taskId}`);renderTask(data);if(data.status==="succeeded")await loadArtifacts(taskId);if(["failed","cancelled","succeeded"].includes(data.status))stopPolling()}
+    async function loadArtifacts(taskId){const data=await apiFetch(`/api/v1/tasks/${taskId}/artifacts`);renderArtifacts(data.artifacts||[])}
+    async function cancelTask(){const taskId=(els.taskIdInput.value||state.taskId).trim();if(!taskId)return fail("没有可取消的任务");await apiFetch(`/api/v1/tasks/${taskId}/cancel`,{method:"POST"});appendLog("已请求取消任务："+taskId,"warn");await refreshTask()}
+    function renderTask(task){els.taskMeta.innerHTML=`<span class="dot"></span><span>${escapeHtml(task.status)} / ${escapeHtml(task.stage)}</span>`;els.taskSummary.innerHTML=`项目路径：<span class="code">${escapeHtml(task.project_path||"-")}</span><br>上游用户：<span class="code">${escapeHtml(task.upstream_user_id||"-")}</span><br>样例参考：<span class="code">${escapeHtml(task.request?.example_reference||"-")}</span><br>创建时间：${escapeHtml(task.created_at||"-")}<br>更新时间：${escapeHtml(task.updated_at||"-")}${task.error?`<br><span style="color:var(--bad)">错误：${escapeHtml(task.error)}</span>`:""}`;renderTimeline(task.stage,task.status);appendLog(`任务状态更新：${task.status} / ${task.stage}`)}
+    function renderTimeline(stage,status){const idx=STAGES.indexOf(stage);els.timeline.innerHTML=STAGES.map((name,i)=>{const cls=status==="failed"&&name===stage?"stage fail":i<idx||stage==="completed"?"stage done":i===idx?"stage active":"stage";return`<div class="${cls}"><div class="stage-index">${i+1}</div><div><strong>${name}</strong><div class="tiny">${stageDesc(name)}</div></div></div>`}).join("")}
+    function renderArtifacts(items){if(!items.length){els.artifacts.innerHTML='<div class="empty">暂无产物</div>';return}els.artifacts.innerHTML=items.map(item=>`<div class="artifact"><div class="artifact-main"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.relative_path||"")}${item.size_bytes?` · ${formatBytes(item.size_bytes)}`:""}</small></div><div class="artifact-actions">${(item.kind==="file"||item.kind==="directory"||item.kind==="log")?`<button class="primary" data-name="${escapeHtml(item.name)}">下载</button>`:""}</div></div>`).join("");els.artifacts.querySelectorAll("button[data-name]").forEach(btn=>btn.addEventListener("click",()=>downloadArtifact(btn.dataset.name)))}
+    function downloadArtifact(name){const taskId=(els.taskIdInput.value||state.taskId).trim();if(!taskId)return fail("缺少 task_id");window.open(`${normalizeBaseUrl(els.baseUrl.value)}/api/v1/tasks/${encodeURIComponent(taskId)}/download/${encodeURIComponent(name)}`,"_blank");appendLog("开始下载产物："+name)}
+    function startPolling(){stopPolling();state.timer=setInterval(()=>refreshTask().catch(err=>appendLog("轮询失败："+err.message,"bad")),3000);els.pollingBtn.textContent="停止轮询";appendLog("已开启 3 秒轮询","ok")}
+    function stopPolling(){if(state.timer){clearInterval(state.timer);state.timer=null;els.pollingBtn.textContent="开启轮询";appendLog("轮询已停止")}}
+    function togglePolling(){state.timer?stopPolling():startPolling()}
+    function clearForm(){$("projectName").value="";$("templateName").value="";$("exampleReference").value="";$("audience").value="";$("useCase").value="";$("coreMessage").value="";els.sourcePaths.value="";els.imagePaths.value="";els.sourceUploads.value="";els.imageUploads.value="";document.querySelectorAll("[data-output]").forEach(btn=>btn.classList.add("sel"));updateUploadHint();appendLog("表单已重置")}
+    function stageDesc(name){return{queued:"任务已创建，等待执行",ingest:"导入文档和图片素材",strategist:"生成 design spec 与页面规划",executor_svg:"按页生成 SVG",executor_notes:"生成备注讲稿",postprocess:"执行后处理脚本",export:"导出 PPTX",completed:"任务结束，可下载产物"}[name]||name}
+    function parseLines(v){return(v||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean)} function nullable(v){v=(v||"").trim();return v||null} function getOutputs(){return[...document.querySelectorAll("[data-output].sel")].map(node=>node.dataset.output)}
+    function fail(msg){showError(msg);appendLog(msg,"bad");throw new Error(msg)}
+    function appendLog(message,level="info"){const color={ok:"var(--ok)",warn:"var(--warn)",bad:"var(--bad)",info:"var(--ink)"}[level]||"var(--ink)";const node=document.createElement("div");node.className="log-entry";node.innerHTML=`<span style="color:${color}">${new Date().toLocaleTimeString()} · ${escapeHtml(message)}</span>`;els.log.prepend(node)}
+    function formatBytes(v){if(v===null||v===undefined)return"-";const u=["B","KB","MB","GB"];let i=0,n=v;while(n>=1024&&i<u.length-1){n/=1024;i++}return`${n.toFixed(n>=100||i===0?0:1)} ${u[i]}`}
+    function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[s]))}
+    function metaRow(label,value){return `<div class="meta-item"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`}
+    function showError(message){els.errorBanner.style.display="block";els.errorBanner.textContent=message}
+    function clearError(){els.errorBanner.style.display="none";els.errorBanner.textContent=""}
+  </script>
+</body>
+</html>
