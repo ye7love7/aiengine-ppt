@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import uuid
+from datetime import datetime
 from io import SEEK_END
 from pathlib import Path
 from typing import Any
@@ -112,6 +114,11 @@ async def get_examples() -> JSONResponse:
     return JSONResponse({"examples": list_examples()})
 
 
+@app.get("/api/v1/templates")
+async def get_templates() -> JSONResponse:
+    return JSONResponse({"templates": _list_templates()})
+
+
 @app.get("/api/v1/examples/{example_name}")
 async def get_example(example_name: str) -> JSONResponse:
     try:
@@ -141,6 +148,8 @@ async def cancel_task(task_id: str) -> JSONResponse:
 
 async def _parse_json_task_request(request: Request) -> TaskCreateRequest:
     body = await request.json()
+    body["project_name"] = _ensure_project_name(body.get("project_name"))
+    body["style_source"] = _ensure_style_source(body.get("style_source"), body.get("example_reference"))
     model = TaskCreateRequest.model_validate(body)
     if model.source_mode != "path":
         raise HTTPException(status_code=400, detail="JSON requests only support source_mode=path")
@@ -149,12 +158,14 @@ async def _parse_json_task_request(request: Request) -> TaskCreateRequest:
 
 
 def _parse_multipart_task_request(form: FormData) -> TaskCreateRequest:
+    example_reference = form.get("example_reference") or None
     payload = {
         "source_mode": form.get("source_mode", "upload"),
-        "project_name": form.get("project_name", ""),
+        "project_name": _ensure_project_name(form.get("project_name", "")),
         "canvas_format": form.get("canvas_format", "ppt169"),
         "template_name": form.get("template_name") or None,
-        "example_reference": form.get("example_reference") or None,
+        "example_reference": example_reference,
+        "style_source": _ensure_style_source(form.get("style_source"), example_reference),
         "audience": form.get("audience") or None,
         "use_case": form.get("use_case") or None,
         "core_message": form.get("core_message") or None,
@@ -259,6 +270,22 @@ def _coerce_list_field(value: Any) -> list[str]:
     return [item.strip() for item in text.split(",") if item.strip()]
 
 
+def _ensure_project_name(value: Any) -> str:
+    text = str(value or "").strip()
+    if text:
+        return text[:120]
+    return f"ppt_task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+
+
+def _ensure_style_source(value: Any, example_reference: Any) -> str:
+    text = str(value or "").strip()
+    if text in {"prompt_reference", "example_strong"}:
+        return text
+    if str(example_reference or "").strip():
+        return "example_strong"
+    return "prompt_reference"
+
+
 def _list_material_group(root: Path) -> list[dict[str, Any]]:
     results = []
     for path in sorted(root.rglob("*")):
@@ -270,6 +297,23 @@ def _list_material_group(root: Path) -> list[dict[str, Any]]:
             {
                 "path": str(path.relative_to(root)),
                 "size_bytes": path.stat().st_size,
+            }
+        )
+    return results
+
+
+def _list_templates() -> list[dict[str, Any]]:
+    layouts_root = SETTINGS.repo_root / "skills" / "ppt-master" / "templates" / "layouts"
+    results: list[dict[str, Any]] = []
+    if not layouts_root.exists():
+        return results
+    for path in sorted(layouts_root.iterdir()):
+        if not path.is_dir():
+            continue
+        results.append(
+            {
+                "name": path.name,
+                "path": str(path.relative_to(layouts_root)),
             }
         )
     return results

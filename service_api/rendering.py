@@ -67,11 +67,16 @@ def render_slide_svg(slide: dict[str, Any], strategy: dict[str, Any], image_dir:
     width, height = [int(part) for part in canvas["viewbox"].split()[2:]]
     theme = strategy["theme"]
     typography = strategy["typography"]
+    style_mode = strategy.get("resolved_style_mode") or strategy.get("style_mode") or "general"
+    example_profile = strategy.get("example_style_profile") or {}
+
+    if style_mode == "pixel_retro":
+        return _render_pixel_slide_svg(slide, width, height, theme)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{canvas["viewbox"]}" width="{width}" height="{height}">',
         f'<rect x="0" y="0" width="{width}" height="{height}" fill="{theme["background"]}"/>',
-        f'<rect x="0" y="0" width="{width}" height="16" fill="{theme["primary"]}"/>',
+        f'<rect x="0" y="0" width="{width}" height="{_resolve_title_band_height(example_profile)}" fill="{theme["primary"]}"/>',
     ]
 
     page_type = slide.get("page_type", "content")
@@ -150,6 +155,85 @@ def render_slide_svg(slide: dict[str, Any], strategy: dict[str, Any], image_dir:
     )
     parts.append("</svg>")
     return "\n".join(parts)
+
+
+def _render_pixel_slide_svg(slide: dict[str, Any], width: int, height: int, theme: dict[str, str]) -> str:
+    title = slide.get("title", "")
+    subtitle = slide.get("subtitle", "")
+    sections = slide.get("sections", [])
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="{theme["background"]}"/>',
+        f'<rect x="0" y="64" width="{width}" height="2" fill="{theme["border"]}" fill-opacity="0.5"/>',
+        text_block(84, 88, split_text(title, 18), 34, theme["primary"], "700"),
+    ]
+    if subtitle:
+        parts.append(text_block(84, 132, split_text(subtitle, 34), 18, theme["muted_text"], "500"))
+
+    page_type = slide.get("page_type", "content")
+    if page_type == "cover":
+        parts.append(f'<rect x="82" y="178" width="{width - 164}" height="{height - 286}" fill="{theme["secondary_background"]}" stroke="{theme["accent"]}" stroke-width="4"/>')
+        highlight = slide.get("highlight") or slide.get("speaker_notes") or ""
+        if highlight:
+            parts.append(text_block(118, 290, split_text(highlight, 44), 22, theme["text"], "600"))
+    elif page_type == "toc":
+        y = 188
+        for idx, section in enumerate(sections, start=1):
+            parts.append(f'<rect x="92" y="{y - 36}" width="{width - 184}" height="78" fill="{theme["secondary_background"]}" stroke="{theme["accent"]}" stroke-width="3"/>')
+            parts.append(f'<rect x="92" y="{y - 36}" width="92" height="78" fill="{theme["primary"]}"/>')
+            parts.append(text_block(122, y + 14, [str(idx)], 30, theme["background"], "700"))
+            parts.append(text_block(214, y + 8, split_text(section.get("heading", ""), 28), 22, theme["text"], "700"))
+            y += 104
+    else:
+        boxes = _pixel_boxes(len(sections) or 1, width, height)
+        for box, section in zip(boxes, sections[: len(boxes)]):
+            x, y, w, h, color = box
+            parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{theme["secondary_background"]}" stroke="{color}" stroke-width="4"/>')
+            parts.append(f'<rect x="{x}" y="{y}" width="92" height="70" fill="{color}"/>')
+            parts.append(text_block(x + 22, y + 44, [str(section.get("index") or slide.get("index") or "")], 26, theme["background"], "700"))
+            parts.append(text_block(x + 116, y + 42, split_text(section.get("heading", ""), 18), 18, color, "700"))
+            bullet_y = y + 92
+            for item in section.get("items", [])[:4]:
+                parts.append(text_block(x + 28, bullet_y, [f"• {item}"], 16, theme["text"], "500"))
+                bullet_y += 42
+        highlight = slide.get("highlight") or ""
+        if highlight:
+            parts.append(f'<rect x="86" y="{height - 126}" width="{width - 172}" height="78" fill="{theme["secondary_background"]}" stroke="{theme["secondary_accent"]}" stroke-width="4"/>')
+            parts.append(text_block(116, height - 78, split_text(highlight, 44), 20, theme["secondary_accent"], "700"))
+
+    parts.append(f'<text x="{width - 74}" y="{height - 22}" font-size="18" fill="{theme["muted_text"]}" font-family="Consolas, monospace">{slide["index"]:02d}</text>')
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
+def _pixel_boxes(section_count: int, width: int, height: int) -> list[tuple[int, int, int, int, str]]:
+    colors = ["#39FF14", "#00D4FF", "#FF2E97", "#FFD700"]
+    if section_count <= 2:
+        return [
+            (86, 176, 520, 262, colors[0]),
+            (672, 176, 520, 262, colors[1]),
+        ]
+    if section_count == 3:
+        return [
+            (48, 176, 382, 262, colors[0]),
+            (450, 176, 382, 262, colors[1]),
+            (852, 176, 382, 262, colors[2]),
+        ]
+    return [
+        (70, 166, 520, 188, colors[0]),
+        (650, 166, 520, 188, colors[1]),
+        (70, 392, 520, 188, colors[2]),
+        (650, 392, 520, 188, colors[3]),
+    ]
+
+
+def _resolve_title_band_height(example_profile: dict[str, Any]) -> int:
+    visual_rules = example_profile.get("visual_rules") or {}
+    try:
+        band_height = int(float(visual_rules.get("title_band_height") or 16))
+    except Exception:
+        band_height = 16
+    return max(12, min(96, band_height))
 
 
 def strategy_to_design_spec(strategy: dict[str, Any], image_inventory: list[dict[str, Any]], project_name: str, canvas_format: str) -> str:

@@ -94,8 +94,10 @@ class TaskStore:
 
     def append_log(self, task_id: str, message: str) -> None:
         timestamp = utcnow().isoformat(timespec="seconds")
+        line = f"[{timestamp}] {message}"
         with self.log_path(task_id).open("a", encoding="utf-8") as handle:
-            handle.write(f"[{timestamp}] {message}\n")
+            handle.write(f"{line}\n")
+        print(line, flush=True)
 
     def set_artifacts(self, task_id: str, artifacts: list[ArtifactEntry]) -> TaskState:
         return self.update_state(task_id, artifacts=artifacts)
@@ -129,6 +131,19 @@ class TaskStore:
                     kind="log",
                     relative_path=str(log_path.relative_to(job_dir)),
                     size_bytes=log_path.stat().st_size,
+                )
+            )
+
+        for metadata_path in sorted(job_dir.glob("*.json")):
+            if metadata_path.name == "state.json":
+                continue
+            artifact_name = f"job_{metadata_path.stem}"
+            artifacts.append(
+                ArtifactEntry(
+                    name=artifact_name,
+                    kind="file",
+                    relative_path=str(metadata_path.relative_to(job_dir)),
+                    size_bytes=metadata_path.stat().st_size,
                 )
             )
 

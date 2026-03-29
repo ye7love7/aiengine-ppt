@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from service_api.main import app  # noqa: E402
 from service_api.config import SETTINGS  # noqa: E402
+from service_api.pipeline import _normalize_template_name  # noqa: E402
 
 
 class ServiceApiTests(unittest.TestCase):
@@ -49,6 +50,13 @@ class ServiceApiTests(unittest.TestCase):
         self.assertIn("examples", payload)
         self.assertTrue(payload["examples"])
 
+    def test_templates_list_is_available(self) -> None:
+        response = self.client.get("/api/v1/templates")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        template_names = {item["name"] for item in payload["templates"]}
+        self.assertIn("mckinsey", template_names)
+
     def test_example_detail_and_download_are_available(self) -> None:
         list_response = self.client.get("/api/v1/examples")
         example_name = list_response.json()["examples"][0]["name"]
@@ -57,6 +65,7 @@ class ServiceApiTests(unittest.TestCase):
         self.assertEqual(detail_response.status_code, 200)
         detail_payload = detail_response.json()
         self.assertEqual(detail_payload["example"]["name"], example_name)
+        self.assertIn("style_profile", detail_payload)
         artifact_names = {item["name"] for item in detail_payload["artifacts"]}
         self.assertIn("design_spec", artifact_names)
 
@@ -95,6 +104,28 @@ class ServiceApiTests(unittest.TestCase):
         finally:
             shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
 
+    def test_create_task_auto_generates_project_name_when_blank(self) -> None:
+        payload = {
+            "source_mode": "path",
+            "project_name": "",
+            "canvas_format": "ppt169",
+            "example_reference": None,
+            "prefer_style": "auto",
+            "notes_style": "formal",
+            "output_formats": ["native_pptx", "svg_pptx"],
+            "source_files": ["sample.md"],
+            "image_files": [],
+        }
+        with patch("service_api.main.run_task", lambda task_id: None):
+            response = self.client.post("/api/v1/tasks", json=payload)
+        self.assertEqual(response.status_code, 200)
+        task_id = response.json()["task_id"]
+        try:
+            state_payload = self.client.get(f"/api/v1/tasks/{task_id}").json()
+            self.assertTrue(state_payload["request"]["project_name"].startswith("ppt_task_"))
+        finally:
+            shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
+
     def test_create_task_accepts_example_reference(self) -> None:
         example_name = self.client.get("/api/v1/examples").json()["examples"][0]["name"]
         payload = {
@@ -115,8 +146,16 @@ class ServiceApiTests(unittest.TestCase):
         try:
             state_payload = self.client.get(f"/api/v1/tasks/{task_id}").json()
             self.assertEqual(state_payload["request"]["example_reference"], example_name)
+            self.assertEqual(state_payload["request"]["style_source"], "example_strong")
         finally:
             shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
+
+    def test_pixel_example_exposes_pixel_retro_recommendation(self) -> None:
+        detail_response = self.client.get("/api/v1/examples/ppt169_像素风_git_introduction")
+        self.assertEqual(detail_response.status_code, 200)
+        payload = detail_response.json()
+        self.assertEqual(payload["style_profile"]["style_tag"], "pixel_retro")
+        self.assertEqual(payload["style_profile"]["recommended_template"], "pixel_retro")
 
     def test_create_task_rejects_unknown_example_reference(self) -> None:
         payload = {
@@ -157,6 +196,29 @@ class ServiceApiTests(unittest.TestCase):
             uploaded = SETTINGS.uploads_root / task_id / "source_files" / "sample.docx"
             self.assertTrue(uploaded.exists())
             self.assertEqual(uploaded.read_bytes(), b"non-empty-doc")
+        finally:
+            shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
+            shutil.rmtree(SETTINGS.uploads_root / task_id, ignore_errors=True)
+
+    def test_multipart_blank_project_name_is_auto_generated(self) -> None:
+        data = {
+            "source_mode": "upload",
+            "project_name": "",
+            "canvas_format": "ppt169",
+            "prefer_style": "auto",
+            "notes_style": "formal",
+            "output_formats": '["native_pptx","svg_pptx"]',
+        }
+        files = {
+            "source_files": ("sample.docx", io.BytesIO(b"non-empty-doc"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        }
+        with patch("service_api.main.run_task", lambda task_id: None):
+            response = self.client.post("/api/v1/tasks", data=data, files=files)
+        self.assertEqual(response.status_code, 200)
+        task_id = response.json()["task_id"]
+        try:
+            state_payload = self.client.get(f"/api/v1/tasks/{task_id}").json()
+            self.assertTrue(state_payload["request"]["project_name"].startswith("ppt_task_"))
         finally:
             shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
             shutil.rmtree(SETTINGS.uploads_root / task_id, ignore_errors=True)
@@ -202,6 +264,12 @@ class ServiceApiTests(unittest.TestCase):
         finally:
             shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
             shutil.rmtree(SETTINGS.uploads_root / task_id, ignore_errors=True)
+
+    def test_normalize_template_name_treats_auto_as_empty(self) -> None:
+        self.assertEqual(_normalize_template_name("auto"), "")
+        self.assertEqual(_normalize_template_name("AUTO"), "")
+        self.assertEqual(_normalize_template_name("none"), "")
+        self.assertEqual(_normalize_template_name("smart_red"), "smart_red")
 
 
 if __name__ == "__main__":

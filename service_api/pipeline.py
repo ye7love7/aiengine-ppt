@@ -9,7 +9,7 @@ from typing import Any, Optional
 from PIL import Image
 
 from .config import SETTINGS
-from .examples import load_example_prompt_context
+from .examples import extract_example_style_profile, load_example_prompt_context, resolve_example_dir
 from .llm import LLM
 from .prompts import EXECUTOR_SYSTEM_PROMPT, STRATEGIST_SYSTEM_PROMPT
 from .rendering import notes_to_total_md, render_slide_svg, slugify, strategy_to_design_spec
@@ -32,6 +32,10 @@ TEMPLATE_BY_STYLE = {
     "general": "smart_red",
     "consulting": "mckinsey",
     "consulting_top": "exhibit",
+    "pixel_retro": "pixel_retro",
+    "government_modern": "government_blue",
+    "brand_modern": "smart_red",
+    "psychology_healing": "psychology_attachment",
 }
 
 
@@ -174,12 +178,23 @@ def _run_strategist(task_id: str, project_path: Path, request_data: dict[str, An
     image_inventory = _analyze_images(project_path / "images") if any((project_path / "images").iterdir()) else []
     example_reference = request_data.get("example_reference") or None
     example_context = load_example_prompt_context(example_reference) if example_reference else None
+    example_profile = extract_example_style_profile(resolve_example_dir(example_reference)) if example_reference else None
+    style_source = request_data.get("style_source") or ("example_strong" if example_reference else "prompt_reference")
+    style_locked = bool(example_reference and style_source == "example_strong")
 
     prefer_style = request_data.get("prefer_style") or "auto"
-    if prefer_style == "auto" and example_context and example_context.get("suggested_style") in TEMPLATE_BY_STYLE:
+    if style_locked and example_profile and example_profile.get("style_tag"):
+        prefer_style = str(example_profile["style_tag"])
+    elif prefer_style == "auto" and example_context and example_context.get("suggested_style") in TEMPLATE_BY_STYLE:
         prefer_style = str(example_context["suggested_style"])
     style_hint = prefer_style if prefer_style != "auto" else "auto based on document type"
-    template_name = request_data.get("template_name") or ""
+    template_name = _normalize_template_name(request_data.get("template_name"))
+    ignored_template_name = ""
+    if style_locked:
+        if template_name:
+            ignored_template_name = template_name
+            STORE.append_log(task_id, f"Example strong reference enabled; ignoring explicit template {template_name}")
+        template_name = _normalize_template_name(example_profile.get("recommended_template") if example_profile else "")
     if template_name:
         _copy_template(project_path, template_name)
 
@@ -194,6 +209,7 @@ Requested core message: {request_data.get('core_message') or 'auto infer'}
 Notes style: {request_data.get('notes_style') or 'formal'}
 Available local images: {[item['filename'] for item in image_inventory]}
 Example style reference: {example_reference or 'none'}
+Style source: {style_source}
 Source material:
 {source_bundle}
 """
@@ -204,25 +220,64 @@ Use the following local example only as a visual and structural style reference.
 Example name: {example_context['name']}
 Suggested style: {example_context['suggested_style']}
 Example summary: {example_context['summary'] or 'N/A'}
+Example style profile:
+{json.dumps(example_context.get('style_profile') or {}, ensure_ascii=False, indent=2)}
 Example README excerpt:
 {example_context['readme_excerpt'] or 'N/A'}
 
 Example design_spec excerpt:
 {example_context['design_spec_excerpt'] or 'N/A'}
 """
-    strategy = LLM.chat_json(STRATEGIST_SYSTEM_PROMPT, prompt, max_tokens=6000)
+    if style_locked and example_profile:
+        prompt += f"""
+
+Hard example-strong constraints:
+- Lock the visual direction to this example style profile and do not fall back to generic business styling.
+- Reuse the example's theme colors, typography tone, layout tags, and recommended template when they are present.
+- Keep the content topic new, but keep the visual language aligned with the example.
+"""
+    strategy = LLM.chat_json(
+        STRATEGIST_SYSTEM_PROMPT,
+        prompt,
+        max_tokens=6000,
+        task_id=task_id,
+        stage_label="strategist",
+    )
     if example_reference:
         strategy["example_reference"] = example_reference
+    strategy["style_source"] = style_source
+    strategy["style_locked"] = style_locked
+    strategy["example_style_profile"] = example_profile or {}
     strategy["canvas_format"] = request_data["canvas_format"]
-    strategy["template_name"] = strategy.get("template_name") or template_name or TEMPLATE_BY_STYLE.get(strategy.get("style_mode", "general"), "")
-    if not template_name and strategy["template_name"]:
-        _copy_template(project_path, strategy["template_name"])
-    strategy["style_mode"] = _normalize_style(strategy.get("style_mode"), prefer_style)
+    if style_locked and example_profile:
+        locked_style = str(example_profile.get("style_tag") or prefer_style or "general")
+        strategy["style_mode"] = locked_style
+        strategy["template_name"] = template_name or TEMPLATE_BY_STYLE.get(locked_style, "")
+    else:
+        strategy["template_name"] = (
+            _normalize_template_name(strategy.get("template_name"))
+            or template_name
+            or TEMPLATE_BY_STYLE.get(strategy.get("style_mode", "general"), "")
+        )
+        if not template_name and strategy["template_name"]:
+            _copy_template(project_path, strategy["template_name"])
+        strategy["style_mode"] = _normalize_style(strategy.get("style_mode"), prefer_style)
     strategy["pages"] = _normalize_pages(strategy)
     strategy["page_count"] = len(strategy["pages"])
     strategy["image_strategy"] = "user_provided" if image_inventory else "none"
-    strategy["theme"] = _normalize_theme(strategy.get("theme") or {}, strategy["style_mode"])
-    strategy["typography"] = _normalize_typography(strategy.get("typography") or {})
+    strategy["theme"] = _normalize_theme(
+        strategy.get("theme") or {},
+        strategy["style_mode"],
+        locked_theme=(example_profile or {}).get("theme") if style_locked else None,
+        visual_rules=(example_profile or {}).get("visual_rules") if style_locked else None,
+    )
+    strategy["typography"] = _normalize_typography(
+        strategy.get("typography") or {},
+        locked_typography=(example_profile or {}).get("typography") if style_locked else None,
+    )
+    strategy["resolved_template_name"] = strategy.get("template_name") or ""
+    strategy["resolved_style_mode"] = strategy.get("style_mode") or "general"
+    strategy["ignored_template_name"] = ignored_template_name
 
     (project_path / "strategy.json").write_text(json.dumps(strategy, ensure_ascii=False, indent=2), encoding="utf-8")
     (project_path / "design_spec.md").write_text(
@@ -230,6 +285,19 @@ Example design_spec excerpt:
         encoding="utf-8",
     )
     STORE.write_stage_metadata(task_id, "strategist", strategy)
+    STORE.update_state(
+        task_id,
+        stage_details={
+            "style_summary": {
+                "style_source": style_source,
+                "example_reference": example_reference or "",
+                "resolved_template_name": strategy["resolved_template_name"],
+                "resolved_style_mode": strategy["resolved_style_mode"],
+                "style_locked": style_locked,
+                "ignored_template_name": ignored_template_name,
+            }
+        },
+    )
     STORE.append_log(task_id, "Strategist output saved")
     return strategy
 
@@ -246,11 +314,18 @@ Presentation language: {strategy['language']}
 Style mode: {strategy['style_mode']}
 Global theme colors: {json.dumps(strategy['theme'], ensure_ascii=False)}
 Typography: {json.dumps(strategy['typography'], ensure_ascii=False)}
+Example style profile: {json.dumps(strategy.get('example_style_profile') or {}, ensure_ascii=False)}
 Available local images: {image_files}
 Previous slide summary: {previous_summary or 'None'}
 Current page plan: {json.dumps(page, ensure_ascii=False)}
 """
-        blueprint = LLM.chat_json(EXECUTOR_SYSTEM_PROMPT, prompt, max_tokens=3000)
+        blueprint = LLM.chat_json(
+            EXECUTOR_SYSTEM_PROMPT,
+            prompt,
+            max_tokens=3000,
+            task_id=task_id,
+            stage_label=f"executor_{file_stem}",
+        )
         blueprint["index"] = page["index"]
         blueprint["file_stem"] = blueprint.get("file_stem") or page["file_stem"]
         blueprint["page_type"] = page["page_type"]
@@ -301,16 +376,30 @@ def _copy_template(project_path: Path, template_name: str) -> None:
             shutil.copy2(path, target)
 
 
+def _normalize_template_name(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.lower() in {"auto", "none", "null", "default"}:
+        return ""
+    return text
+
+
 def _normalize_style(style_value: Optional[str], preferred: str) -> str:
-    if preferred in {"general", "consulting", "consulting_top"}:
+    if preferred in TEMPLATE_BY_STYLE:
         return preferred
-    if style_value in {"general", "consulting", "consulting_top"}:
+    if style_value in TEMPLATE_BY_STYLE:
         return style_value
     return "general"
 
 
-def _normalize_theme(theme: dict[str, Any], style_mode: str) -> dict[str, str]:
-    defaults = {
+def _normalize_theme(
+    theme: dict[str, Any],
+    style_mode: str,
+    locked_theme: Optional[dict[str, Any]] = None,
+    visual_rules: Optional[dict[str, Any]] = None,
+) -> dict[str, str]:
+    defaults_by_style = {
         "general": {
             "background": "#F7F9FC",
             "secondary_background": "#FFFFFF",
@@ -341,26 +430,74 @@ def _normalize_theme(theme: dict[str, Any], style_mode: str) -> dict[str, str]:
             "muted_text": "#CBD5E1",
             "border": "#334155",
         },
-    }[style_mode]
+        "pixel_retro": {
+            "background": "#0D1117",
+            "secondary_background": "#161B22",
+            "primary": "#39FF14",
+            "accent": "#00D4FF",
+            "secondary_accent": "#FF2E97",
+            "text": "#E6EDF3",
+            "muted_text": "#8B949E",
+            "border": "#30363D",
+        },
+        "government_modern": {
+            "background": "#F8FAFF",
+            "secondary_background": "#FFFFFF",
+            "primary": "#0D4EA6",
+            "accent": "#1C7ED6",
+            "secondary_accent": "#4DABF7",
+            "text": "#102A43",
+            "muted_text": "#486581",
+            "border": "#D9E2EC",
+        },
+        "brand_modern": {
+            "background": "#FFF9F5",
+            "secondary_background": "#FFFFFF",
+            "primary": "#C7512D",
+            "accent": "#F28C28",
+            "secondary_accent": "#2E86AB",
+            "text": "#1F2933",
+            "muted_text": "#52606D",
+            "border": "#E5E7EB",
+        },
+        "psychology_healing": {
+            "background": "#FAFCFF",
+            "secondary_background": "#FFFFFF",
+            "primary": "#5A7D9A",
+            "accent": "#7BC6CC",
+            "secondary_accent": "#F4A261",
+            "text": "#34495E",
+            "muted_text": "#6C7A89",
+            "border": "#D6E4F0",
+        },
+    }
+    defaults = defaults_by_style.get(style_mode, defaults_by_style["general"])
     normalized = defaults.copy()
+    for key, value in (locked_theme or {}).items():
+        text = str(value or "").strip()
+        if text.startswith("#") and len(text) == 7:
+            normalized[key] = text.upper()
     for key in defaults:
         value = str(theme.get(key) or "").strip()
         if value.startswith("#") and len(value) in {4, 7}:
             normalized[key] = value
+    if visual_rules and visual_rules.get("background_mode") == "dark":
+        normalized["background"] = normalized.get("background", "#0F172A")
+        normalized["secondary_background"] = normalized.get("secondary_background", "#111C33")
     return normalized
 
 
-def _normalize_typography(typography: dict[str, Any]) -> dict[str, Any]:
+def _normalize_typography(typography: dict[str, Any], locked_typography: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     body_size = typography.get("body_size")
     try:
         body_size = int(body_size)
     except Exception:
-        body_size = 20
+        body_size = locked_typography.get("body_size") if locked_typography else 20
     body_size = min(24, max(18, body_size))
     return {
-        "title_font": typography.get("title_font") or "Microsoft YaHei",
-        "body_font": typography.get("body_font") or "Microsoft YaHei",
-        "emphasis_font": typography.get("emphasis_font") or "SimHei",
+        "title_font": typography.get("title_font") or (locked_typography or {}).get("title_font") or "Microsoft YaHei",
+        "body_font": typography.get("body_font") or (locked_typography or {}).get("body_font") or "Microsoft YaHei",
+        "emphasis_font": typography.get("emphasis_font") or (locked_typography or {}).get("emphasis_font") or "SimHei",
         "body_size": body_size,
     }
 

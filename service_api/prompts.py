@@ -15,7 +15,7 @@ Return a JSON object with this schema:
   "audience": "string",
   "use_case": "string",
   "core_message": "string",
-  "style_mode": "general|consulting|consulting_top",
+  "style_mode": "general|consulting|consulting_top|pixel_retro|government_modern|brand_modern|psychology_healing",
   "template_name": "string or empty",
   "theme": {
     "background": "#RRGGBB",
@@ -56,6 +56,7 @@ Rules:
 - Add a toc page when it improves readability.
 - Keep bullets concise and presentation-ready.
 - If the user requested a preferred style, respect it unless it is clearly incompatible.
+- If an example style profile is supplied in the prompt, treat it as a strong visual constraint and do not drift back to generic styling.
 """
 
 
@@ -92,5 +93,5 @@ Rules:
 - Use image_filename only when an existing local image is clearly useful.
 - For cover/ending pages, sections may be empty.
 - The response language must match the slide language.
+- If an example style profile is supplied, mirror its layout rhythm and visual grammar without copying its topic text.
 """
-

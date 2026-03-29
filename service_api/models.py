@@ -22,14 +22,16 @@ TaskStage = Literal[
 SourceMode = Literal["path", "upload"]
 PreferStyle = Literal["general", "consulting", "consulting_top", "auto"]
 OutputFormat = Literal["native_pptx", "svg_pptx"]
+StyleSource = Literal["prompt_reference", "example_strong"]
 
 
 class TaskCreateRequest(BaseModel):
     source_mode: SourceMode
-    project_name: str = Field(min_length=1, max_length=120)
+    project_name: str = Field(default="", max_length=120)
     canvas_format: str = "ppt169"
     template_name: Optional[str] = None
     example_reference: Optional[str] = None
+    style_source: StyleSource = "prompt_reference"
     audience: Optional[str] = None
     use_case: Optional[str] = None
     core_message: Optional[str] = None
