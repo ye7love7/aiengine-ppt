@@ -72,6 +72,8 @@ def render_slide_svg(slide: dict[str, Any], strategy: dict[str, Any], image_dir:
 
     if style_mode == "pixel_retro":
         return _render_pixel_slide_svg(slide, width, height, theme)
+    if style_mode == "yijing_classic":
+        return _render_yijing_slide_svg(slide, width, height, theme)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{canvas["viewbox"]}" width="{width}" height="{height}">',
@@ -213,6 +215,41 @@ def _render_pixel_slide_svg(slide: dict[str, Any], width: int, height: int, them
     return "\n".join(parts)
 
 
+def _render_yijing_slide_svg(slide: dict[str, Any], width: int, height: int, theme: dict[str, str]) -> str:
+    title = slide.get("title", "")
+    subtitle = slide.get("subtitle", "")
+    sections = slide.get("sections", [])
+    archetype = slide.get("example_archetype") or _infer_yijing_archetype_from_slide(slide, sections)
+    page_type = slide.get("page_type", "content")
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
+    ]
+
+    if page_type in {"cover", "ending"}:
+        parts.append(f'<rect x="0" y="0" width="{width}" height="{height}" fill="{theme["background"]}"/>')
+        parts.append(f'<rect x="0" y="0" width="{width}" height="18" fill="{theme["secondary_accent"]}" fill-opacity="0.9"/>')
+    else:
+        parts.append(f'<rect x="0" y="0" width="{width}" height="{height}" fill="{theme["secondary_background"]}"/>')
+        parts.append(f'<rect x="0" y="0" width="{width}" height="14" fill="{theme["secondary_accent"]}" fill-opacity="0.9"/>')
+
+    if page_type == "cover":
+        parts.extend(_render_yijing_cover(slide, width, height, theme))
+    elif page_type == "toc":
+        parts.extend(_render_yijing_toc(slide, width, height, theme))
+    elif page_type == "ending":
+        parts.extend(_render_yijing_ending(slide, width, height, theme))
+    else:
+        parts.extend(_render_yijing_content(slide, width, height, theme, sections, archetype, title, subtitle))
+
+    parts.append(
+        f'<text x="{width - 66}" y="{height - 24}" font-size="15" fill="{theme["muted_text"]}" '
+        f'font-family="Microsoft YaHei, Arial, sans-serif">{slide["index"]:02d}</text>'
+    )
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
 def _pixel_boxes_for_archetype(archetype: str, section_count: int, width: int, height: int) -> list[tuple[int, int, int, int, str]]:
     colors = ["#39FF14", "#00D4FF", "#FF2E97", "#FFD700"]
     if archetype == "pixel_compare_board":
@@ -257,6 +294,162 @@ def _render_pixel_ending(slide: dict[str, Any], width: int, height: int, theme: 
     ]
 
 
+def _render_yijing_cover(slide: dict[str, Any], width: int, height: int, theme: dict[str, str]) -> list[str]:
+    title_lines = split_text(slide.get("title", ""), 16)
+    subtitle_lines = split_text(slide.get("subtitle", ""), 24)
+    return [
+        f'<rect x="84" y="110" width="560" height="{height - 220}" fill="#1A2430" fill-opacity="0.92"/>',
+        f'<line x1="120" y1="178" x2="680" y2="178" stroke="{theme["primary"]}" stroke-width="3"/>',
+        text_block(118, 208, title_lines, 34, theme["primary"], "700"),
+        text_block(118, 310, subtitle_lines[:2], 20, theme["muted_text"], "500"),
+        f'<rect x="122" y="{height - 170}" width="430" height="84" fill="{theme["secondary_accent"]}" fill-opacity="0.32"/>',
+        text_block(150, height - 122, split_text(slide.get("highlight") or slide.get("speaker_notes") or "", 24)[:2], 20, theme["text"], "600"),
+        f'<circle cx="{width - 186}" cy="{height / 2:.0f}" r="74" fill="none" stroke="{theme["primary"]}" stroke-width="4" stroke-opacity="0.9"/>',
+        f'<path d="M {width - 186} {height / 2 - 74:.0f} A 74 74 0 0 1 {width - 186} {height / 2 + 74:.0f}" fill="{theme["secondary_background"]}" fill-opacity="0.92"/>',
+        f'<path d="M {width - 186} {height / 2 - 74:.0f} A 74 74 0 0 0 {width - 186} {height / 2 + 74:.0f}" fill="{theme["background"]}" fill-opacity="0.4"/>',
+        f'<circle cx="{width - 186}" cy="{height / 2 - 36:.0f}" r="12" fill="{theme["primary"]}"/>',
+        f'<circle cx="{width - 186}" cy="{height / 2 + 36:.0f}" r="12" fill="{theme["secondary_background"]}"/>',
+    ]
+
+
+def _render_yijing_toc(slide: dict[str, Any], width: int, height: int, theme: dict[str, str]) -> list[str]:
+    parts = [
+        text_block(88, 92, split_text(slide.get("title") or "目录", 18), 30, "#2C3E50", "700"),
+        f'<line x1="88" y1="114" x2="{width - 120}" y2="114" stroke="{theme["primary"]}" stroke-width="3"/>',
+    ]
+    y = 172
+    for idx, section in enumerate(slide.get("sections", [])[:6], start=1):
+        parts.append(f'<rect x="92" y="{y - 34}" width="{width - 184}" height="78" rx="18" fill="#FFFFFF" stroke="{theme["border"]}" stroke-width="2"/>')
+        parts.append(f'<rect x="92" y="{y - 34}" width="94" height="78" rx="18" fill="{theme["secondary_accent"]}" fill-opacity="0.14"/>')
+        parts.append(text_block(124, y + 12, [f"{idx:02d}"], 24, theme["secondary_accent"], "700"))
+        parts.append(text_block(224, y + 6, split_text(section.get("heading", ""), 26), 21, "#2C3E50", "600"))
+        y += 96
+    return parts
+
+
+def _render_yijing_content(
+    slide: dict[str, Any],
+    width: int,
+    height: int,
+    theme: dict[str, str],
+    sections: list[dict[str, Any]],
+    archetype: str,
+    title: str,
+    subtitle: str,
+) -> list[str]:
+    parts = [
+        text_block(76, 88, split_text(title, 22), 28, "#2C3E50", "700"),
+        f'<line x1="76" y1="108" x2="{width - 90}" y2="108" stroke="{theme["primary"]}" stroke-width="3"/>',
+    ]
+    if subtitle:
+        parts.append(text_block(76, 136, split_text(subtitle, 34), 16, theme["muted_text"], "500"))
+
+    if archetype == "yijing_lines_panel":
+        parts.extend(_render_yijing_lines_panel(slide, width, height, theme, sections))
+        return parts
+    if archetype == "yijing_dual_panel":
+        parts.extend(_render_yijing_dual_panel(slide, width, height, theme, sections))
+        return parts
+    parts.extend(_render_yijing_text_panel(slide, width, height, theme, sections))
+    return parts
+
+
+def _render_yijing_lines_panel(
+    slide: dict[str, Any],
+    width: int,
+    height: int,
+    theme: dict[str, str],
+    sections: list[dict[str, Any]],
+) -> list[str]:
+    left = sections[0] if sections else {"heading": "卦象结构", "items": []}
+    right = sections[1] if len(sections) > 1 else {"heading": "核心解读", "items": slide.get("key_points", [])[:3]}
+    parts = [
+        f'<rect x="58" y="156" width="548" height="430" rx="20" fill="#233243" stroke="{theme["secondary_accent"]}" stroke-width="2"/>',
+        f'<rect x="706" y="156" width="520" height="430" rx="20" fill="#FFFFFF" stroke="{theme["accent"]}" stroke-width="2"/>',
+        f'<rect x="58" y="156" width="548" height="56" rx="20" fill="{theme["secondary_accent"]}"/>',
+        f'<rect x="706" y="156" width="520" height="56" rx="20" fill="{theme["accent"]}"/>',
+        text_block(252, 192, split_text(left.get("heading", ""), 12), 20, "#FFFFFF", "700"),
+        text_block(900, 192, split_text(right.get("heading", ""), 12), 20, "#FFFFFF", "700"),
+    ]
+    yao_y = 250
+    for idx in range(6):
+        is_yang = idx in {0, 2, 5}
+        line_y = yao_y + idx * 34
+        if is_yang:
+            parts.append(f'<rect x="258" y="{line_y}" width="146" height="8" rx="4" fill="{theme["primary"] if idx == 3 else "#8A98A6"}"/>')
+        else:
+            parts.append(f'<rect x="236" y="{line_y}" width="52" height="8" rx="4" fill="#8A98A6"/>')
+            parts.append(f'<rect x="322" y="{line_y}" width="52" height="8" rx="4" fill="#8A98A6"/>')
+        parts.append(f'<rect x="430" y="{line_y}" width="52" height="8" rx="4" fill="#8A98A6"/>')
+        parts.append(f'<rect x="516" y="{line_y}" width="52" height="8" rx="4" fill="#8A98A6"/>')
+    quote = slide.get("highlight") or slide.get("speaker_notes") or "谦，亨，君子有终。"
+    parts.append(f'<rect x="94" y="420" width="476" height="88" rx="14" fill="none" stroke="{theme["primary"]}" stroke-width="2"/>')
+    parts.append(text_block(146, 464, split_text(quote, 18)[:2], 18, theme["primary"], "700"))
+
+    item_y = 262
+    for item in right.get("items", [])[:4]:
+        parts.append(f'<rect x="742" y="{item_y - 24}" width="444" height="74" rx="14" fill="#F8F8F6" stroke="{theme["border"]}" stroke-width="1.5"/>')
+        parts.append(f'<rect x="742" y="{item_y - 24}" width="6" height="74" fill="{theme["secondary_accent"] if item_y < 330 else theme["accent"]}"/>')
+        parts.append(text_block(776, item_y + 4, split_text(item, 20), 17, "#2C3E50", "600"))
+        item_y += 92
+    return parts
+
+
+def _render_yijing_dual_panel(
+    slide: dict[str, Any],
+    width: int,
+    height: int,
+    theme: dict[str, str],
+    sections: list[dict[str, Any]],
+) -> list[str]:
+    colors = [theme["secondary_accent"], theme["accent"]]
+    boxes = [(58, 170, 548, 400), (674, 170, 548, 400)]
+    parts: list[str] = []
+    for idx, section in enumerate(sections[:2] or [{"heading": slide.get("title", ""), "items": slide.get("key_points", [])[:3]}]):
+        x, y, w, h = boxes[min(idx, 1)]
+        color = colors[min(idx, 1)]
+        parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="20" fill="#FFFFFF" stroke="{color}" stroke-width="2"/>')
+        parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="58" rx="20" fill="{color}" fill-opacity="0.12"/>')
+        parts.append(text_block(x + 28, y + 38, split_text(section.get("heading", ""), 16), 20, color, "700"))
+        bullet_y = y + 98
+        for item in section.get("items", [])[:5]:
+            parts.append(f'<circle cx="{x + 30}" cy="{bullet_y - 6}" r="4" fill="{color}"/>')
+            parts.append(text_block(x + 48, bullet_y, split_text(item, 20), 17, "#2C3E50", "500"))
+            bullet_y += 54
+    return parts
+
+
+def _render_yijing_text_panel(
+    slide: dict[str, Any],
+    width: int,
+    height: int,
+    theme: dict[str, str],
+    sections: list[dict[str, Any]],
+) -> list[str]:
+    parts = [f'<rect x="70" y="168" width="{width - 140}" height="392" rx="22" fill="#FFFFFF" stroke="{theme["border"]}" stroke-width="2"/>']
+    current_y = 214
+    for section in sections[:4]:
+        parts.append(text_block(104, current_y, split_text(section.get("heading", ""), 24), 20, theme["primary"], "700"))
+        current_y += 34
+        for item in section.get("items", [])[:4]:
+            parts.append(f'<circle cx="112" cy="{current_y - 6}" r="4" fill="{theme["accent"]}"/>')
+            parts.append(text_block(130, current_y, split_text(item, 42), 17, "#2C3E50", "500"))
+            current_y += 38
+        current_y += 18
+    return parts
+
+
+def _render_yijing_ending(slide: dict[str, Any], width: int, height: int, theme: dict[str, str]) -> list[str]:
+    highlight = slide.get("highlight") or slide.get("speaker_notes") or "谦受益，满招损。"
+    return [
+        f'<rect x="124" y="156" width="{width - 248}" height="360" rx="26" fill="#16202C" stroke="{theme["primary"]}" stroke-width="2"/>',
+        text_block(188, 250, split_text(slide.get("title", ""), 18), 34, theme["primary"], "700"),
+        text_block(188, 334, split_text(highlight, 28)[:3], 22, theme["text"], "500"),
+        f'<line x1="188" y1="384" x2="{width - 188}" y2="384" stroke="{theme["secondary_accent"]}" stroke-width="2" stroke-opacity="0.7"/>',
+        text_block(188, 444, split_text(slide.get("subtitle", "") or "以谦守正，以静制动。", 30), 18, theme["muted_text"], "500"),
+    ]
+
+
 def _infer_pixel_archetype_from_slide(slide: dict[str, Any], sections: list[dict[str, Any]]) -> str:
     chart_type = slide.get("chart_type") or ""
     if slide.get("page_type") == "toc":
@@ -268,6 +461,23 @@ def _infer_pixel_archetype_from_slide(slide: dict[str, Any], sections: list[dict
     if len(sections) >= 3:
         return "pixel_triple_panel"
     return "pixel_dual_panel"
+
+
+def _infer_yijing_archetype_from_slide(slide: dict[str, Any], sections: list[dict[str, Any]]) -> str:
+    page_type = slide.get("page_type")
+    chart_type = slide.get("chart_type") or ""
+    title = slide.get("title", "")
+    if page_type == "cover":
+        return "yijing_cover_taiji"
+    if page_type == "toc":
+        return "yijing_toc_scroll"
+    if page_type == "ending":
+        return "yijing_ending_quote"
+    if "卦" in title or "六爻" in title:
+        return "yijing_lines_panel"
+    if chart_type == "comparison" or len(sections) >= 2:
+        return "yijing_dual_panel"
+    return "yijing_text_panel"
 
 
 def _resolve_title_band_height(example_profile: dict[str, Any]) -> int:

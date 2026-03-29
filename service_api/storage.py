@@ -30,6 +30,7 @@ class TaskStore:
             SETTINGS.uploads_root,
             SETTINGS.jobs_root,
             SETTINGS.examples_downloads_root,
+            SETTINGS.example_style_cache_root,
         ):
             path.mkdir(parents=True, exist_ok=True)
 

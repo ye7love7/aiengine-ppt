@@ -1,33 +1,75 @@
 from __future__ import annotations
 
 import io
+import json
 import shutil
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from service_api.main import app  # noqa: E402
 from service_api.config import SETTINGS  # noqa: E402
+from service_api.examples import extract_example_style_profile, resolve_example_dir  # noqa: E402
+from service_api.main import app  # noqa: E402
 from service_api.pipeline import _normalize_template_name  # noqa: E402
 from service_api.rendering import render_slide_svg  # noqa: E402
+
+
+def _fake_style_classifier(system_prompt: str, user_prompt: str, max_tokens: int = 1200, **_: object) -> dict[str, object]:
+    payload = json.loads(user_prompt)
+    example_name = str(payload.get("example_name") or "")
+    if "像素风" in example_name:
+        return {
+            "style_tag": "pixel_retro",
+            "recommended_template": "pixel_retro",
+            "confidence": 0.96,
+            "reason": "Example uses pixel retro HUD language.",
+        }
+    if "易理风" in example_name:
+        return {
+            "style_tag": "yijing_classic",
+            "recommended_template": "",
+            "confidence": 0.95,
+            "reason": "Example centers on 易理/卦象/阴阳 visual grammar.",
+        }
+    if "顶级咨询" in example_name:
+        return {
+            "style_tag": "consulting_top",
+            "recommended_template": "exhibit",
+            "confidence": 0.9,
+            "reason": "Example has board-style exhibit structure.",
+        }
+    return {
+        "style_tag": "consulting",
+        "recommended_template": "mckinsey",
+        "confidence": 0.7,
+        "reason": "Fallback consulting classification for tests.",
+    }
 
 
 class ServiceApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls._classifier_patcher = patch("service_api.examples.LLM.chat_json", side_effect=_fake_style_classifier)
+        cls._classifier_patcher.start()
         cls.client = TestClient(app)
         (SETTINGS.materials_docs_root / "sample.md").write_text("# Sample\n\nHello", encoding="utf-8")
         (SETTINGS.materials_images_root / "sample.png").write_bytes(b"fake")
 
     @classmethod
     def tearDownClass(cls) -> None:
+        cls._classifier_patcher.stop()
         for path in [
             SETTINGS.materials_docs_root / "sample.md",
             SETTINGS.materials_images_root / "sample.png",
         ]:
             if path.exists():
                 path.unlink()
+
+    def setUp(self) -> None:
+        shutil.rmtree(SETTINGS.example_style_cache_root, ignore_errors=True)
+        SETTINGS.example_style_cache_root.mkdir(parents=True, exist_ok=True)
 
     def test_materials_is_public(self) -> None:
         response = self.client.get("/api/v1/materials")
@@ -157,6 +199,48 @@ class ServiceApiTests(unittest.TestCase):
         payload = detail_response.json()
         self.assertEqual(payload["style_profile"]["style_tag"], "pixel_retro")
         self.assertEqual(payload["style_profile"]["recommended_template"], "pixel_retro")
+        self.assertEqual(payload["style_profile"]["style_source"], "llm_classified")
+
+    def test_yijing_example_exposes_yijing_classic_profile(self) -> None:
+        profile = extract_example_style_profile(resolve_example_dir("ppt169_易理风_地山谦卦深度研究"))
+        self.assertEqual(profile["style_tag"], "yijing_classic")
+        self.assertEqual(profile["recommended_template"], "")
+        self.assertEqual(profile["page_archetypes"].get("cover"), "yijing_cover_taiji")
+        self.assertEqual(profile["page_archetypes"].get("toc"), "yijing_toc_scroll")
+        self.assertEqual(profile["page_archetypes"].get("ending"), "yijing_ending_quote")
+        self.assertEqual(profile["theme"]["primary"], "#B8860B")
+        self.assertEqual(profile["typography"]["body_size"], 18)
+
+    def test_style_classifier_cache_hit_avoids_second_llm_call(self) -> None:
+        example_dir = resolve_example_dir("ppt169_像素风_git_introduction")
+        with patch(
+            "service_api.examples._classify_style_with_llm",
+            return_value={"style_tag": "pixel_retro", "recommended_template": "pixel_retro", "confidence": 0.99, "reason": "cached test"},
+        ) as mock_classify:
+            first = extract_example_style_profile(example_dir)
+            second = extract_example_style_profile(example_dir)
+        self.assertEqual(first["style_tag"], "pixel_retro")
+        self.assertEqual(second["style_tag"], "pixel_retro")
+        self.assertEqual(mock_classify.call_count, 1)
+
+    def test_style_classifier_cache_invalidation_triggers_new_llm_call(self) -> None:
+        example_dir = resolve_example_dir("ppt169_像素风_git_introduction")
+        with patch("service_api.examples._build_example_classifier_fingerprint", side_effect=["fingerprint-a", "fingerprint-b"]):
+            with patch(
+                "service_api.examples._classify_style_with_llm",
+                return_value={"style_tag": "pixel_retro", "recommended_template": "pixel_retro", "confidence": 0.99, "reason": "invalidate test"},
+            ) as mock_classify:
+                extract_example_style_profile(example_dir)
+                extract_example_style_profile(example_dir)
+        self.assertEqual(mock_classify.call_count, 2)
+
+    def test_style_classifier_fallback_keeps_rule_result(self) -> None:
+        example_dir = resolve_example_dir("ppt169_易理风_地山谦卦深度研究")
+        with patch("service_api.examples._classify_style_with_llm", side_effect=RuntimeError("llm down")):
+            profile = extract_example_style_profile(example_dir)
+        self.assertEqual(profile["style_tag"], "yijing_classic")
+        self.assertEqual(profile["style_source"], "rule_fallback")
+        self.assertEqual(profile["style_confidence"], 0.0)
 
     def test_pixel_renderer_moves_subtitle_below_multi_line_title(self) -> None:
         slide = {
@@ -187,6 +271,42 @@ class ServiceApiTests(unittest.TestCase):
         svg = render_slide_svg(slide, strategy, SETTINGS.materials_images_root)
         self.assertIn('y="182"', svg)
         self.assertIn("MODULE 03:", svg)
+
+    def test_yijing_renderer_uses_dedicated_visual_language(self) -> None:
+        slide = {
+            "index": 3,
+            "page_type": "content",
+            "title": "地山谦：六十四卦中的唯一全吉之卦",
+            "subtitle": "卦象结构解析与谦卦唯一性",
+            "sections": [
+                {"heading": "卦象结构解析", "items": ["上卦为地，下卦为山", "六爻层次体现内刚外柔", "谦以自牧，守正持中"]},
+                {"heading": "谦卦唯一性", "items": ["六十四卦中罕见的全吉范式", "越是谦退越显其力量", "适合作为稳健治理的隐喻"]},
+            ],
+            "highlight": "谦，亨，君子有终。",
+            "chart_type": "comparison",
+            "example_archetype": "yijing_lines_panel",
+        }
+        strategy = {
+            "canvas_format": "ppt169",
+            "theme": {
+                "background": "#0D1117",
+                "secondary_background": "#F5F3EF",
+                "primary": "#B8860B",
+                "accent": "#C94C4C",
+                "secondary_accent": "#2D5A5A",
+                "text": "#E8E4DC",
+                "muted_text": "#8B9A9A",
+                "border": "#4A5568",
+            },
+            "typography": {"title_font": "Microsoft YaHei", "body_font": "Microsoft YaHei", "emphasis_font": "SimHei", "body_size": 18},
+            "resolved_style_mode": "yijing_classic",
+            "example_style_profile": {},
+        }
+        svg = render_slide_svg(slide, strategy, SETTINGS.materials_images_root)
+        self.assertIn("#B8860B", svg)
+        self.assertIn("#2D5A5A", svg)
+        self.assertIn("地山谦", svg)
+        self.assertIn("六十四卦中的唯一全吉之卦", svg)
 
     def test_create_task_rejects_unknown_example_reference(self) -> None:
         payload = {

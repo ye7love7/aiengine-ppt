@@ -42,6 +42,7 @@ class Settings:
     uploads_root: Path
     jobs_root: Path
     examples_downloads_root: Path
+    example_style_cache_root: Path
     service_token: str
     llm_base_url: str
     llm_api_key: str
@@ -72,6 +73,7 @@ def load_settings() -> Settings:
     uploads_root = data_root / "uploads"
     jobs_root = data_root / "jobs"
     examples_downloads_root = data_root / "examples_downloads"
+    example_style_cache_root = data_root / "example_style_cache"
 
     def get_config(key: str, default: str) -> str:
         return os.environ.get(key, dotenv_values.get(key, default))
@@ -83,6 +85,7 @@ def load_settings() -> Settings:
         uploads_root=uploads_root,
         jobs_root=jobs_root,
         examples_downloads_root=examples_downloads_root,
+        example_style_cache_root=example_style_cache_root,
         service_token=get_config("PPT_SERVICE_TOKEN", "sk-123123"),
         llm_base_url=_normalize_base_url(get_config("LLM_BASE_URL", "https://api-inference.modelscope.cn/v1")),
         llm_api_key=get_config("LLM_API_KEY", "ms-2888fabb-e8e8-4113-86a3-257b3b4b5a4b"),

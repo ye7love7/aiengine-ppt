@@ -36,6 +36,7 @@ TEMPLATE_BY_STYLE = {
     "government_modern": "government_blue",
     "brand_modern": "smart_red",
     "psychology_healing": "psychology_attachment",
+    "yijing_classic": "",
 }
 
 
@@ -469,6 +470,16 @@ def _normalize_theme(
             "text": "#34495E",
             "muted_text": "#6C7A89",
             "border": "#D6E4F0",
+        },
+        "yijing_classic": {
+            "background": "#0D1117",
+            "secondary_background": "#F5F3EF",
+            "primary": "#B8860B",
+            "accent": "#C94C4C",
+            "secondary_accent": "#2D5A5A",
+            "text": "#E8E4DC",
+            "muted_text": "#8B9A9A",
+            "border": "#4A5568",
         },
     }
     defaults = defaults_by_style.get(style_mode, defaults_by_style["general"])

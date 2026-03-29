@@ -15,7 +15,7 @@ Return a JSON object with this schema:
   "audience": "string",
   "use_case": "string",
   "core_message": "string",
-  "style_mode": "general|consulting|consulting_top|pixel_retro|government_modern|brand_modern|psychology_healing",
+  "style_mode": "general|consulting|consulting_top|pixel_retro|government_modern|brand_modern|psychology_healing|yijing_classic",
   "template_name": "string or empty",
   "theme": {
     "background": "#RRGGBB",
