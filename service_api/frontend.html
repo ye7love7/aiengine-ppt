@@ -264,12 +264,13 @@
       const hasExample=!!nullable(els.exampleReference.value);
       const selectedTemplate=nullable(els.templateName.value);
       if(hasExample){
-        els.templateName.value="";
-        els.templateName.disabled=true;
-        els.templateHint.textContent="已选择样例风格参考，模板名会自动让位给样例风格。";
-        els.exampleHint.textContent="当前默认使用 example_strong 强参考模式。";
+        els.templateName.disabled=false;
+        els.templateHint.textContent=selectedTemplate?"已同时选择模板和样例，系统将优先按模板生成。":"已选择样例风格参考，未选模板时会按样例强参考生成。";
+        els.exampleHint.textContent=selectedTemplate?"样例仅作为辅助风格参考，不会覆盖模板。":"当前默认使用 example_strong 强参考模式。";
         els.modeHint.className="upload-hint";
-        els.modeHint.textContent=`当前将按样例强参考生成：${els.exampleReference.value}。不会使用通用自动风格。`;
+        els.modeHint.textContent=selectedTemplate
+          ?`当前按模板生成：${selectedTemplate}；样例参考：${els.exampleReference.value} 仅作辅助，不会覆盖模板。`
+          :`当前将按样例强参考生成：${els.exampleReference.value}。不会使用通用自动风格。`;
       }else{
         els.templateName.disabled=false;
         els.templateHint.textContent="";
@@ -330,7 +331,7 @@
         source_mode:"upload",
         project_name:projectName,
         canvas_format:$("canvasFormat").value,
-        template_name:exampleReference?null:nullable($("templateName").value),
+        template_name:nullable($("templateName").value),
         example_reference:exampleReference,
         style_source:exampleReference?"example_strong":"prompt_reference",
         audience:nullable($("audience").value),

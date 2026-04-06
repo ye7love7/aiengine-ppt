@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 import sys
+import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +14,34 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from project_utils import CANVAS_FORMATS  # type: ignore  # noqa: E402
+
+SVG_NS = "http://www.w3.org/2000/svg"
+SVG = f"{{{SVG_NS}}}"
+PLACEHOLDER_RE = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
+ET.register_namespace("", SVG_NS)
+TEMPLATE_CONTRACT_REGISTRY_PATH = Path(__file__).with_name("template_contracts.json")
+
+
+def _load_template_contract_registry() -> tuple[dict[str, dict[str, Any]], dict[str, str], dict[str, Any]]:
+    registry = json.loads(TEMPLATE_CONTRACT_REGISTRY_PATH.read_text(encoding="utf-8"))
+    families = registry.get("families") or {}
+    templates = registry.get("templates") or {}
+    default_family_name = str(registry.get("default_family") or "generic")
+    default_contract = families.get(default_family_name) or next(iter(families.values()), {
+        "page_files": {
+            "cover": ["01_cover.svg"],
+            "toc": ["02_toc.svg", "02_chapter.svg"],
+            "chapter": ["02_chapter.svg", "03_content.svg"],
+            "content": ["03_content.svg"],
+            "ending": ["04_ending.svg"],
+        },
+        "semantic_overrides": {},
+        "aliases": {},
+    })
+    return families, templates, default_contract
+
+
+TEMPLATE_CONTRACT_FAMILIES, TEMPLATE_CONTRACTS, DEFAULT_TEMPLATE_CONTRACT = _load_template_contract_registry()
 
 
 def escape_xml(text: str) -> str:
@@ -62,13 +93,23 @@ def text_block(x: int, y: int, lines: list[str], font_size: int, fill: str, weig
     )
 
 
-def render_slide_svg(slide: dict[str, Any], strategy: dict[str, Any], image_dir: Path) -> str:
+def render_slide_svg(
+    slide: dict[str, Any],
+    strategy: dict[str, Any],
+    image_dir: Path,
+    template_dir: Path | None = None,
+) -> str:
     canvas = CANVAS_FORMATS[strategy.get("canvas_format", "ppt169")]
     width, height = [int(part) for part in canvas["viewbox"].split()[2:]]
     theme = strategy["theme"]
     typography = strategy["typography"]
     style_mode = strategy.get("resolved_style_mode") or strategy.get("style_mode") or "general"
     example_profile = strategy.get("example_style_profile") or {}
+
+    if template_dir:
+        template_svg = _render_template_driven_slide(slide, strategy, image_dir, template_dir, width, height)
+        if template_svg:
+            return template_svg
 
     if style_mode == "pixel_retro":
         return _render_pixel_slide_svg(slide, width, height, theme)
@@ -161,6 +202,735 @@ def render_slide_svg(slide: dict[str, Any], strategy: dict[str, Any], image_dir:
     )
     parts.append("</svg>")
     return "\n".join(parts)
+
+
+def _render_template_driven_slide(
+    slide: dict[str, Any],
+    strategy: dict[str, Any],
+    image_dir: Path,
+    template_dir: Path,
+    width: int,
+    height: int,
+) -> str | None:
+    template_name = str(strategy.get("resolved_template_name") or strategy.get("template_name") or "").strip()
+    template_contract = _get_template_contract(template_name)
+    template_path = _resolve_template_svg_path(template_dir, slide.get("page_type", "content"), template_contract)
+    if not template_path or not template_path.exists():
+        return None
+    try:
+        root = ET.fromstring(template_path.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return None
+
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    placeholders = _build_template_placeholders(slide, strategy, template_contract)
+    content_box = _detect_content_box(root)
+
+    for elem in list(root.iter()):
+        for attr_name, attr_value in list(elem.attrib.items()):
+            if "{{" in attr_value:
+                elem.set(attr_name, _replace_inline_placeholders(attr_value, placeholders))
+
+    for elem in list(root.iter()):
+        if elem.tag != f"{SVG}text":
+            continue
+        raw_text = "".join(elem.itertext()).strip()
+        if not raw_text:
+            continue
+        if "{{CONTENT_AREA}}" in raw_text or _is_template_hint_text(raw_text):
+            if content_box and _element_within_box(elem, content_box):
+                parent = parent_map.get(elem)
+                if parent is not None:
+                    parent.remove(elem)
+            elif "{{CONTENT_AREA}}" in raw_text:
+                parent = parent_map.get(elem)
+                if parent is not None:
+                    parent.remove(elem)
+            continue
+        _replace_text_placeholders(elem, placeholders)
+
+    if content_box:
+        placeholder_rect = content_box.get("element")
+        if placeholder_rect is not None:
+            parent = parent_map.get(placeholder_rect)
+            if parent is not None:
+                parent.remove(placeholder_rect)
+        content_group = _render_template_content_group(slide, strategy, image_dir, template_contract, content_box, width, height)
+        if content_group:
+            root.append(ET.fromstring(content_group))
+
+    return ET.tostring(root, encoding="unicode")
+
+
+def _get_template_contract(template_name: str) -> dict[str, Any]:
+    family = TEMPLATE_CONTRACTS.get(template_name, "generic")
+    return TEMPLATE_CONTRACT_FAMILIES.get(family, DEFAULT_TEMPLATE_CONTRACT)
+
+
+def _resolve_template_svg_path(template_dir: Path, page_type: str, template_contract: dict[str, Any]) -> Path | None:
+    page_files = template_contract.get("page_files") or DEFAULT_TEMPLATE_CONTRACT["page_files"]
+    candidates = page_files.get(page_type, ["03_content.svg"])
+    for candidate in candidates:
+        path = template_dir / candidate
+        if path.exists():
+            return path
+    return None
+
+
+def _get_template_layout_config(template_contract: dict[str, Any], archetype: str) -> dict[str, Any]:
+    default_layouts = DEFAULT_TEMPLATE_CONTRACT.get("content_layouts") or {}
+    default_shared = default_layouts.get("shared") or {}
+    default_specific = default_layouts.get(archetype) or {}
+    contract_layouts = template_contract.get("content_layouts") or {}
+    contract_shared = contract_layouts.get("shared") or {}
+    contract_specific = contract_layouts.get(archetype) or {}
+    return {
+        **default_shared,
+        **default_specific,
+        **contract_shared,
+        **contract_specific,
+    }
+
+
+def _build_template_placeholders(slide: dict[str, Any], strategy: dict[str, Any], template_contract: dict[str, Any]) -> dict[str, str]:
+    semantic_values = _build_base_template_semantics(slide, strategy)
+    _apply_family_template_semantics(semantic_values, slide, strategy, template_contract)
+    placeholders = {key: str(value or "") for key, value in semantic_values.items()}
+    aliases = template_contract.get("aliases") or {}
+    for semantic_key, placeholder_names in aliases.items():
+        value = semantic_values.get(semantic_key.upper(), semantic_values.get(semantic_key, ""))
+        for placeholder_name in placeholder_names:
+            placeholders[str(placeholder_name)] = str(value or "")
+    return {key: str(value or "") for key, value in placeholders.items()}
+
+
+def _build_base_template_semantics(slide: dict[str, Any], strategy: dict[str, Any]) -> dict[str, Any]:
+    today = datetime.now().strftime("%Y-%m-%d")
+    page_num = int(slide.get("index") or 1)
+    sections = slide.get("sections") or []
+    key_points = slide.get("key_points") or []
+    kpis = slide.get("kpis") or []
+    highlight = slide.get("highlight") or ""
+    project_name = str(strategy.get("project_name") or "")
+    chapter_num = _infer_chapter_num(slide.get("title") or "", page_num)
+    chapter_desc = slide.get("goal") or highlight or slide.get("subtitle") or " · ".join(key_points[:2]) or slide.get("title") or ""
+    summary = _build_template_summary_payload(slide)
+    feature_items = _collect_template_feature_items(slide)
+    comparison = _build_template_compare_payload(slide)
+    tag_items = _collect_template_tag_items(slide)
+    goal_items = _build_template_goal_payload(slide)
+    institution = str(strategy.get("organization") or strategy.get("audience") or project_name).strip()
+    department = str(strategy.get("use_case") or strategy.get("audience") or "").strip()
+    contact_info = highlight or strategy.get("core_message") or ""
+    source = str(strategy.get("presentation_title") or project_name).strip()
+
+    semantic_values = {
+        "TITLE": slide.get("title") or strategy.get("presentation_title") or "",
+        "TITLE_EN": slide.get("subtitle") or strategy.get("use_case") or "",
+        "SUBTITLE": slide.get("subtitle") or "",
+        "AUTHOR": project_name,
+        "AUTHOR_EN": slugify(project_name).replace("-", " ").upper(),
+        "VERSION": strategy.get("resolved_template_name") or "v1.0",
+        "TOTAL_PAGES": str(strategy.get("page_count") or page_num),
+        "DATE": today,
+        "PROJECT_ID": slugify(project_name).upper(),
+        "PRESENTER": project_name,
+        "ORGANIZATION": institution,
+        "ORG_SHORT": project_name[:24],
+        "PAGE_TITLE": slide.get("title") or "",
+        "PAGE_TITLE_EN": slide.get("subtitle") or strategy.get("use_case") or "",
+        "PAGE_SUBTITLE": slide.get("subtitle") or "",
+        "PAGE_NUM": f"{page_num:02d}",
+        "CHAPTER_NUM": chapter_num,
+        "CHAPTER_TITLE": slide.get("title") or "",
+        "CHAPTER_SUBTITLE": slide.get("subtitle") or "",
+        "CHAPTER_TITLE_EN": slide.get("subtitle") or "",
+        "CHAPTER_DESC": chapter_desc,
+        "CHAPTER_EN": slide.get("subtitle") or strategy.get("use_case") or "",
+        "KEY_MESSAGE": highlight or " · ".join(key_points[:3]) or slide.get("title") or "",
+        "SOURCE": source,
+        "THANK_YOU": slide.get("title") or "感谢聆听",
+        "THANK_YOU_EN": slide.get("subtitle") or "THANK YOU",
+        "ENDING_SUBTITLE": slide.get("subtitle") or "请批评指正",
+        "END_SUBTITLE": slide.get("subtitle") or "请批评指正",
+        "CONTACT_NAME": project_name,
+        "CONTACT_INFO": contact_info,
+        "CONTACT_LINE_2": source,
+        "COPYRIGHT": str(datetime.now().year),
+        "CONTENT_AREA": "",
+        "STAT_1": str(len(sections)),
+        "STAT_2": str(sum(len(section.get("items", [])) for section in sections)),
+        "STAT_3": str(len(key_points) or len(sections)),
+        "CTA_TEXT": highlight or slide.get("title") or "Thank you",
+        "CLOSING_MESSAGE": highlight or slide.get("goal") or slide.get("subtitle") or "欢迎交流",
+        "WEBSITE": source,
+        "ADVISOR": project_name,
+        "DEPARTMENT": department,
+        "INSTITUTION": institution,
+        "EMAIL": source,
+        "SECTION_NAME": slide.get("title") or "",
+        "SECTION_NUM": chapter_num,
+        "LOGO": project_name[:12],
+        "LOGO_HEADER": project_name[:12],
+        "LOGO_LARGE": project_name[:12],
+        "QUOTE": highlight or slide.get("goal") or slide.get("title") or "",
+        "QUOTE_AUTHOR": project_name,
+        "COVER_BG_IMAGE": "",
+    }
+    for idx in range(1, 7):
+        section = sections[idx - 1] if idx - 1 < len(sections) else {}
+        items = section.get("items", []) if isinstance(section, dict) else []
+        semantic_values[f"TOC_ITEM_{idx}_TITLE"] = section.get("heading", "") if isinstance(section, dict) else ""
+        semantic_values[f"TOC_ITEM_{idx}_DESC"] = " / ".join(str(item) for item in items[:2])
+    for idx in range(1, 4):
+        item = summary[idx - 1]
+        semantic_values[f"SUMMARY_{idx}_TITLE"] = item["title"]
+        semantic_values[f"SUMMARY_{idx}_LINE_1"] = item["lines"][0]
+        semantic_values[f"SUMMARY_{idx}_LINE_2"] = item["lines"][1]
+        semantic_values[f"SUMMARY_{idx}_LINE_3"] = item["lines"][2]
+        semantic_values[f"SUMMARY_{idx}_STAT"] = item["stat"]
+    for idx in range(1, 5):
+        semantic_values[f"FEATURE_{idx}"] = feature_items[idx - 1] if idx - 1 < len(feature_items) else ""
+        semantic_values[f"TAG_{idx}"] = tag_items[idx - 1] if idx - 1 < len(tag_items) else ""
+        goal = goal_items[idx - 1]
+        semantic_values[f"GOAL_{idx}"] = goal["title"]
+        semantic_values[f"GOAL_{idx}_DESC"] = goal["desc"]
+    semantic_values["COMPARE_A"] = comparison["header_a"]
+    semantic_values["COMPARE_B"] = comparison["header_b"]
+    semantic_values["STAT_1_LABEL"] = kpis[0].get("label", "指标 1") if len(kpis) > 0 else "指标 1"
+    semantic_values["STAT_2_LABEL"] = kpis[1].get("label", "指标 2") if len(kpis) > 1 else "指标 2"
+    semantic_values["STAT_3_LABEL"] = kpis[2].get("label", "指标 3") if len(kpis) > 2 else "指标 3"
+    semantic_values["STAT_LABEL_1"] = semantic_values["STAT_1_LABEL"]
+    semantic_values["STAT_LABEL_2"] = semantic_values["STAT_2_LABEL"]
+    semantic_values["STAT_LABEL_3"] = semantic_values["STAT_3_LABEL"]
+    semantic_values["STAT_NUMBER_1"] = semantic_values["STAT_1"]
+    semantic_values["STAT_NUMBER_2"] = semantic_values["STAT_2"]
+    semantic_values["STAT_NUMBER_3"] = semantic_values["STAT_3"]
+    for idx in range(1, 4):
+        row = comparison["rows"][idx - 1]
+        semantic_values[f"ROW_{idx}_A"] = row[0]
+        semantic_values[f"ROW_{idx}_B"] = row[1]
+    return semantic_values
+
+
+def _apply_family_template_semantics(
+    semantic_values: dict[str, Any],
+    slide: dict[str, Any],
+    strategy: dict[str, Any],
+    template_contract: dict[str, Any],
+) -> None:
+    overrides = template_contract.get("semantic_overrides") or {}
+    for semantic_key, source_name in overrides.items():
+        value = _resolve_template_semantic_source(str(source_name), slide, strategy, semantic_values)
+        semantic_values[semantic_key] = value
+        semantic_values[str(semantic_key).upper()] = value
+
+
+def _resolve_template_semantic_source(
+    source_name: str,
+    slide: dict[str, Any],
+    strategy: dict[str, Any],
+    semantic_values: dict[str, Any],
+) -> str:
+    project_name = str(strategy.get("project_name") or "")
+    use_case = str(strategy.get("use_case") or "")
+    audience = str(strategy.get("audience") or "")
+    organization = str(strategy.get("organization") or "")
+    subtitle = str(slide.get("subtitle") or "")
+    highlight = str(slide.get("highlight") or "")
+    goal = str(slide.get("goal") or "")
+    title = str(slide.get("title") or "")
+    core_message = str(strategy.get("core_message") or "")
+    source = str(semantic_values.get("SOURCE") or "")
+
+    if source_name == "image_filename":
+        return str(slide.get("image_filename") or "")
+    if source_name == "project_name":
+        return project_name
+    if source_name == "project_short":
+        return project_name[:12]
+    if source_name == "project_slug_upper":
+        return slugify(project_name).replace("_", " ").upper()
+    if source_name == "source":
+        return source
+    if source_name == "subtitle_or_use_case":
+        return subtitle or use_case
+    if source_name == "organization_or_audience_or_project_name":
+        return organization or audience or project_name
+    if source_name == "use_case_or_audience":
+        return use_case or audience
+    if source_name == "highlight_or_core_message":
+        return highlight or core_message
+    if source_name == "core_message_or_highlight_or_title":
+        return core_message or highlight or title
+    if source_name == "highlight_or_goal_or_title":
+        return highlight or goal or title
+    if source_name == "subtitle_or_literal_thank_you":
+        return subtitle or "THANK YOU"
+    return str(semantic_values.get(source_name.upper(), semantic_values.get(source_name, "")) or "")
+
+
+def _build_template_summary_payload(slide: dict[str, Any]) -> list[dict[str, Any]]:
+    sections = slide.get("sections") or []
+    key_points = slide.get("key_points") or []
+    kpis = slide.get("kpis") or []
+    summary: list[dict[str, Any]] = []
+    for idx in range(3):
+        section = sections[idx] if idx < len(sections) else {}
+        heading = str(section.get("heading") or (key_points[idx] if idx < len(key_points) else f"要点 {idx + 1}")).strip()
+        items = [str(item).strip() for item in section.get("items", [])[:3]] if isinstance(section, dict) else []
+        while len(items) < 3:
+            fallback = key_points[len(items)] if len(items) < len(key_points) else ""
+            items.append(str(fallback or ""))
+        stat = ""
+        if idx < len(kpis):
+            kpi = kpis[idx]
+            stat = f'{kpi.get("label", "")}: {kpi.get("value", "")}'.strip(": ")
+        summary.append({"title": heading, "lines": items[:3], "stat": stat})
+    return summary
+
+
+def _collect_template_feature_items(slide: dict[str, Any]) -> list[str]:
+    sections = slide.get("sections") or []
+    features: list[str] = []
+    for section in sections:
+        heading = str(section.get("heading") or "").strip()
+        if heading:
+            features.append(heading)
+        for item in section.get("items", [])[:4]:
+            if len(features) >= 4:
+                break
+            features.append(str(item).strip())
+        if len(features) >= 4:
+            break
+    while len(features) < 4:
+        features.append("")
+    return features[:4]
+
+
+def _collect_template_tag_items(slide: dict[str, Any]) -> list[str]:
+    tags: list[str] = []
+    for point in slide.get("key_points", [])[:4]:
+        tags.append(str(point).strip())
+    if not tags:
+        for section in slide.get("sections", [])[:4]:
+            heading = str(section.get("heading") or "").strip()
+            if heading:
+                tags.append(heading)
+    while len(tags) < 4:
+        tags.append("")
+    return tags[:4]
+
+
+def _build_template_goal_payload(slide: dict[str, Any]) -> list[dict[str, str]]:
+    goals: list[dict[str, str]] = []
+    sections = slide.get("sections") or []
+    for idx in range(4):
+        section = sections[idx] if idx < len(sections) else {}
+        title = str(section.get("heading") or "").strip() if isinstance(section, dict) else ""
+        desc = ""
+        if isinstance(section, dict):
+            items = [str(item).strip() for item in section.get("items", [])[:2]]
+            desc = " / ".join(item for item in items if item)
+        if not title and idx < len(slide.get("key_points", []) or []):
+            title = str(slide["key_points"][idx]).strip()
+        goals.append({"title": title, "desc": desc})
+    return goals
+
+
+def _build_template_compare_payload(slide: dict[str, Any]) -> dict[str, Any]:
+    sections = slide.get("sections") or []
+    kpis = slide.get("kpis") or []
+    header_a = str(sections[0].get("heading") if len(sections) > 0 else (kpis[0].get("label") if len(kpis) > 0 else "当前")).strip() or "当前"
+    header_b = str(sections[1].get("heading") if len(sections) > 1 else (kpis[1].get("label") if len(kpis) > 1 else "目标")).strip() or "目标"
+    rows: list[tuple[str, str]] = []
+    for idx in range(3):
+        left = ""
+        right = ""
+        if len(sections) > 0 and idx < len(sections[0].get("items", [])):
+            left = str(sections[0]["items"][idx]).strip()
+        if len(sections) > 1 and idx < len(sections[1].get("items", [])):
+            right = str(sections[1]["items"][idx]).strip()
+        if not left and idx < len(kpis):
+            left = str(kpis[idx].get("label") or "").strip()
+        if not right and idx < len(kpis):
+            right = str(kpis[idx].get("value") or "").strip()
+        rows.append((left, right))
+    return {"header_a": header_a, "header_b": header_b, "rows": rows}
+
+
+def _replace_inline_placeholders(text: str, placeholders: dict[str, str]) -> str:
+    return PLACEHOLDER_RE.sub(lambda match: escape_xml(placeholders.get(match.group(1), "")), text)
+
+
+def _replace_text_placeholders(elem: ET.Element, placeholders: dict[str, str]) -> None:
+    text = elem.text or ""
+    if "{{" not in text:
+        return
+    stripped = text.strip()
+    full_match = PLACEHOLDER_RE.fullmatch(stripped)
+    if full_match:
+        replacement = placeholders.get(full_match.group(1), "")
+        lines = _wrap_placeholder_text(full_match.group(1), replacement)
+        for child in list(elem):
+            elem.remove(child)
+        if len(lines) <= 1:
+            elem.text = replacement
+            return
+        elem.text = None
+        x_value = elem.get("x") or "0"
+        line_height = _line_height_for_text(elem)
+        for idx, line in enumerate(lines):
+            tspan = ET.Element(f"{SVG}tspan")
+            tspan.set("x", x_value)
+            tspan.set("dy", "0" if idx == 0 else str(line_height))
+            tspan.text = line
+            elem.append(tspan)
+        return
+    elem.text = PLACEHOLDER_RE.sub(lambda match: placeholders.get(match.group(1), ""), text)
+
+
+def _wrap_placeholder_text(name: str, value: str) -> list[str]:
+    if not value:
+        return [""]
+    wrap_map = {
+        "TITLE": 18,
+        "SUBTITLE": 32,
+        "PAGE_TITLE": 24,
+        "PAGE_TITLE_EN": 32,
+        "CHAPTER_TITLE": 22,
+        "CHAPTER_SUBTITLE": 32,
+        "CHAPTER_TITLE_EN": 32,
+        "CHAPTER_DESC": 40,
+        "KEY_MESSAGE": 56,
+        "ENDING_SUBTITLE": 32,
+        "END_SUBTITLE": 32,
+        "THANK_YOU_EN": 32,
+        "CTA_TEXT": 36,
+        **{f"SUMMARY_{idx}_TITLE": 22 for idx in range(1, 4)},
+        **{f"SUMMARY_{idx}_LINE_{line}": 22 for idx in range(1, 4) for line in range(1, 4)},
+        **{f"SUMMARY_{idx}_STAT": 28 for idx in range(1, 4)},
+        **{f"FEATURE_{idx}": 20 for idx in range(1, 5)},
+        "COMPARE_A": 16,
+        "COMPARE_B": 16,
+        **{f"ROW_{idx}_A": 16 for idx in range(1, 4)},
+        **{f"ROW_{idx}_B": 16 for idx in range(1, 4)},
+        **{f"TOC_ITEM_{idx}_TITLE": 24 for idx in range(1, 7)},
+        **{f"TOC_ITEM_{idx}_DESC": 34 for idx in range(1, 7)},
+    }
+    max_chars = wrap_map.get(name)
+    return split_text(value, max_chars)[:3] if max_chars else [value]
+
+
+def _line_height_for_text(elem: ET.Element) -> int:
+    font_size = elem.get("font-size") or "20"
+    match = re.search(r"(\d+)", font_size)
+    size = int(match.group(1)) if match else 20
+    return int(size * 1.35)
+
+
+def _detect_content_box(root: ET.Element) -> dict[str, Any] | None:
+    best: dict[str, Any] | None = None
+    best_area = -1.0
+    for rect in root.iter(f"{SVG}rect"):
+        if not rect.get("stroke-dasharray"):
+            continue
+        try:
+            x = float(rect.get("x") or 0)
+            y = float(rect.get("y") or 0)
+            box_width = float(rect.get("width") or 0)
+            box_height = float(rect.get("height") or 0)
+        except ValueError:
+            continue
+        area = box_width * box_height
+        if area > best_area:
+            best_area = area
+            best = {"x": x, "y": y, "width": box_width, "height": box_height, "element": rect}
+    return best
+
+
+def _is_template_hint_text(text: str) -> bool:
+    markers = ["Executor", "自由布局", "可用空间", "内容区域", "由 Executor", "AI 灵活布局区域", "可使用的布局模式"]
+    return any(marker in text for marker in markers)
+
+
+def _element_within_box(elem: ET.Element, box: dict[str, Any]) -> bool:
+    try:
+        x = float(elem.get("x") or 0)
+        y = float(elem.get("y") or 0)
+    except ValueError:
+        return False
+    return box["x"] <= x <= box["x"] + box["width"] and box["y"] <= y <= box["y"] + box["height"]
+
+
+def _infer_chapter_num(title: str, page_num: int) -> str:
+    match = re.match(r"\s*([一二三四五六七八九十\d]+)", title)
+    return match.group(1) if match else f"{page_num:02d}"
+
+
+def _render_template_content_group(
+    slide: dict[str, Any],
+    strategy: dict[str, Any],
+    image_dir: Path,
+    template_contract: dict[str, Any],
+    box: dict[str, Any],
+    width: int,
+    height: int,
+) -> str:
+    del width, height
+    theme = strategy["theme"]
+    typography = strategy["typography"]
+    sections = slide.get("sections") or [{"heading": slide.get("title", ""), "items": slide.get("key_points", [])[:3]}]
+    kpis = slide.get("kpis") or []
+    archetype = str(slide.get("content_archetype") or "lead_cards").strip().lower()
+    image_filename = slide.get("image_filename") or ""
+    image_path = image_dir / image_filename if image_filename else None
+    x = int(box["x"])
+    y = int(box["y"])
+    box_width = int(box["width"])
+    box_height = int(box["height"])
+    shared_layout = _get_template_layout_config(template_contract, "shared")
+    pad = int(shared_layout.get("outer_pad", 24))
+    parts = [f'<g xmlns="{SVG_NS}">']
+
+    body_x = x + pad
+    body_y = y + pad
+    body_w = box_width - pad * 2
+    body_h = box_height - pad * 2
+    layout_config = _get_template_layout_config(template_contract, archetype)
+    footer_mode = str(layout_config.get("summary_footer", "none")).strip().lower()
+    kpi_zone = str(layout_config.get("kpi_zone", "none")).strip().lower()
+    footer_height = 38 if footer_mode == "compact" else 0
+    kpi_reserved_height = 0
+
+    if archetype == "kpi_row" and kpis:
+        consumed = _append_template_kpi_row(parts, kpis, body_x, body_y, body_w, theme, _get_template_layout_config(template_contract, "kpi_row"))
+        body_y += consumed
+        body_h -= consumed
+    elif kpi_zone == "top" and kpis:
+        consumed = _append_template_kpi_row(parts, kpis, body_x, body_y, body_w, theme, _get_template_layout_config(template_contract, "kpi_row"))
+        body_y += consumed
+        body_h -= consumed
+    elif kpi_zone == "bottom" and kpis:
+        kpi_reserved_height = int(_get_template_layout_config(template_contract, "kpi_row").get("consumed_height", 104))
+
+    if footer_height:
+        body_h -= footer_height
+    if kpi_reserved_height:
+        body_h -= kpi_reserved_height
+
+    if archetype == "image_left_text_right" and image_path and image_path.exists():
+        _append_template_image_text_layout(parts, sections, image_filename, image_path, body_x, body_y, body_w, body_h, theme, typography, layout_config)
+    elif archetype == "dual_column":
+        _append_template_dual_column_layout(parts, sections, body_x, body_y, body_w, body_h, theme, typography, layout_config)
+    elif archetype == "list_grid":
+        _append_template_list_grid_layout(parts, sections, body_x, body_y, body_w, body_h, theme, typography, layout_config)
+    else:
+        _append_template_lead_cards_layout(parts, sections, body_x, body_y, body_w, body_h, theme, typography, layout_config)
+
+    footer_y = body_y + body_h
+    if footer_height:
+        _append_template_footer_summary(parts, sections, body_x, footer_y, body_w, theme)
+        footer_y += footer_height
+    if kpi_reserved_height:
+        _append_template_kpi_row(parts, kpis, body_x, footer_y, body_w, theme, _get_template_layout_config(template_contract, "kpi_row"))
+
+    parts.append("</g>")
+    return "".join(parts)
+
+
+def _append_template_kpi_row(
+    parts: list[str],
+    kpis: list[dict[str, Any]],
+    body_x: int,
+    body_y: int,
+    body_w: int,
+    theme: dict[str, str],
+    layout_config: dict[str, Any],
+) -> int:
+    card_gap = int(layout_config.get("card_gap", 16))
+    card_height = int(layout_config.get("card_height", 84))
+    card_radius = int(layout_config.get("card_radius", 14))
+    label_size = int(layout_config.get("label_size", 14))
+    value_size = int(layout_config.get("value_size", 24))
+    card_count = min(3, len(kpis))
+    card_w = int((body_w - card_gap * (card_count - 1)) / max(1, card_count))
+    for idx, kpi in enumerate(kpis[:card_count]):
+        card_x = body_x + idx * (card_w + card_gap)
+        parts.append(f'<rect x="{card_x}" y="{body_y}" width="{card_w}" height="{card_height}" rx="{card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
+        parts.append(text_block(card_x + 18, body_y + 34, split_text(kpi.get("label", ""), 18)[:1], label_size, theme["muted_text"], "600"))
+        parts.append(text_block(card_x + 18, body_y + 64, split_text(kpi.get("value", ""), 16)[:1], value_size, theme["primary"], "700"))
+    return int(layout_config.get("consumed_height", card_height + 20))
+
+
+def _append_template_lead_cards_layout(
+    parts: list[str],
+    sections: list[dict[str, Any]],
+    body_x: int,
+    body_y: int,
+    body_w: int,
+    body_h: int,
+    theme: dict[str, str],
+    typography: dict[str, Any],
+    layout_config: dict[str, Any],
+) -> None:
+    lead = sections[0]
+    lead_h = int(layout_config.get("lead_height_multi", 124)) if len(sections) > 1 else min(int(layout_config.get("lead_height_single_max", 172)), body_h)
+    card_radius = int(layout_config.get("card_radius", 16))
+    sub_card_radius = int(layout_config.get("sub_card_radius", 14))
+    section_gap = int(layout_config.get("section_gap", 18))
+    sub_gap = int(layout_config.get("sub_gap", 16))
+    parts.append(f'<rect x="{body_x}" y="{body_y}" width="{body_w}" height="{lead_h}" rx="{card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
+    parts.append(text_block(body_x + 22, body_y + 34, split_text(lead.get("heading", ""), 22)[:2], 20, theme["text"], "700"))
+    bullet_y = body_y + 66
+    for item in lead.get("items", [])[:4]:
+        parts.append(f'<circle cx="{body_x + 28}" cy="{bullet_y - 6}" r="4" fill="{theme["primary"]}"/>')
+        parts.append(text_block(body_x + 42, bullet_y, split_text(str(item), 44)[:2], typography.get("body_size", 18), theme["text"]))
+        bullet_y += 38
+
+    remaining = sections[1:4]
+    if not remaining:
+        return
+
+    sub_y = body_y + lead_h + section_gap
+    sub_count = len(remaining)
+    sub_w = int((body_w - sub_gap * max(0, sub_count - 1)) / max(1, sub_count))
+    for idx, section in enumerate(remaining):
+        card_x = body_x + idx * (sub_w + sub_gap)
+        card_h = max(120, body_h - lead_h - section_gap)
+        parts.append(f'<rect x="{card_x}" y="{sub_y}" width="{sub_w}" height="{card_h}" rx="{sub_card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
+        parts.append(text_block(card_x + 18, sub_y + 30, split_text(section.get("heading", ""), 16)[:2], 17, theme["text"], "700"))
+        item_y = sub_y + 58
+        for item in section.get("items", [])[:4]:
+            parts.append(f'<circle cx="{card_x + 22}" cy="{item_y - 6}" r="3.5" fill="{theme["accent"]}"/>')
+            parts.append(text_block(card_x + 34, item_y, split_text(str(item), 20)[:2], 14, theme["text"]))
+            item_y += 30
+
+
+def _append_template_dual_column_layout(
+    parts: list[str],
+    sections: list[dict[str, Any]],
+    body_x: int,
+    body_y: int,
+    body_w: int,
+    body_h: int,
+    theme: dict[str, str],
+    typography: dict[str, Any],
+    layout_config: dict[str, Any],
+) -> None:
+    gap = int(layout_config.get("gap", 18))
+    card_radius = int(layout_config.get("card_radius", 16))
+    header_bar_height = int(layout_config.get("header_bar_height", 8))
+    col_w = int((body_w - gap) / 2)
+    for idx in range(min(2, len(sections))):
+        section = sections[idx]
+        x = body_x + idx * (col_w + gap)
+        parts.append(f'<rect x="{x}" y="{body_y}" width="{col_w}" height="{body_h}" rx="{card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
+        parts.append(f'<rect x="{x}" y="{body_y}" width="{col_w}" height="{header_bar_height}" rx="{card_radius}" fill="{theme["primary"]}"/>')
+        parts.append(text_block(x + 20, body_y + 34, split_text(section.get("heading", ""), 18)[:2], 19, theme["text"], "700"))
+        item_y = body_y + 66
+        for item in section.get("items", [])[:6]:
+            parts.append(f'<circle cx="{x + 24}" cy="{item_y - 6}" r="4" fill="{theme["accent"]}"/>')
+            parts.append(text_block(x + 36, item_y, split_text(str(item), 22)[:2], typography.get("body_size", 18), theme["text"]))
+            item_y += typography.get("body_size", 18) + 18
+    footer_mode = str(layout_config.get("summary_footer", "compact")).strip().lower()
+    if footer_mode == "inline_compact" and len(sections) > 2:
+        footer_y = body_y + body_h - 54
+        extras = " / ".join(section.get("heading", "") for section in sections[2:4] if section.get("heading"))
+        if extras:
+            parts.append(text_block(body_x + 8, footer_y, split_text(extras, 56)[:2], 14, theme["muted_text"], "600"))
+
+
+def _append_template_list_grid_layout(
+    parts: list[str],
+    sections: list[dict[str, Any]],
+    body_x: int,
+    body_y: int,
+    body_w: int,
+    body_h: int,
+    theme: dict[str, str],
+    typography: dict[str, Any],
+    layout_config: dict[str, Any],
+) -> None:
+    cols = int(layout_config.get("cols", 2))
+    gap = int(layout_config.get("gap", 18))
+    card_radius = int(layout_config.get("card_radius", 16))
+    rows = max(1, (min(4, len(sections)) + 1) // 2)
+    card_w = int((body_w - gap) / cols)
+    card_h = int((body_h - gap * max(0, rows - 1)) / rows)
+    for idx, section in enumerate(sections[:4]):
+        row = idx // 2
+        col = idx % 2
+        x = body_x + col * (card_w + gap)
+        y = body_y + row * (card_h + gap)
+        parts.append(f'<rect x="{x}" y="{y}" width="{card_w}" height="{card_h}" rx="{card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
+        parts.append(text_block(x + 18, y + 32, split_text(section.get("heading", ""), 18)[:2], 18, theme["text"], "700"))
+        item_y = y + 58
+        for item in section.get("items", [])[:4]:
+            parts.append(f'<rect x="{x + 18}" y="{item_y - 12}" width="8" height="8" fill="{theme["primary"]}"/>')
+            parts.append(text_block(x + 34, item_y, split_text(str(item), 20)[:2], 14, theme["text"]))
+            item_y += 28
+
+
+def _append_template_image_text_layout(
+    parts: list[str],
+    sections: list[dict[str, Any]],
+    image_filename: str,
+    image_path: Path,
+    body_x: int,
+    body_y: int,
+    body_w: int,
+    body_h: int,
+    theme: dict[str, str],
+    typography: dict[str, Any],
+    layout_config: dict[str, Any],
+) -> None:
+    image_ratio = float(layout_config.get("image_ratio", 0.36))
+    gap = int(layout_config.get("gap", 20))
+    image_height_ratio = float(layout_config.get("image_height_ratio", 0.78))
+    card_radius = int(layout_config.get("card_radius", 16))
+    image_side = str(layout_config.get("image_side", "left")).strip().lower()
+    image_w = int(body_w * image_ratio)
+    text_w = body_w - image_w - gap
+    image_h = min(body_h, int(body_h * image_height_ratio))
+    if image_side == "right":
+        text_x = body_x
+        image_x = body_x + text_w + gap
+    else:
+        image_x = body_x
+        text_x = body_x + image_w + gap
+    parts.append(f'<rect x="{image_x}" y="{body_y}" width="{image_w}" height="{image_h}" rx="{card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
+    parts.append(f'<image href="../images/{escape_xml(image_filename)}" x="{image_x}" y="{body_y}" width="{image_w}" height="{image_h}" preserveAspectRatio="xMidYMid slice"/>')
+    parts.append(f'<rect x="{image_x}" y="{body_y}" width="{image_w}" height="{image_h}" rx="{card_radius}" fill="{theme["background"]}" fill-opacity="0.06"/>')
+
+    lead = sections[0]
+    parts.append(f'<rect x="{text_x}" y="{body_y}" width="{text_w}" height="{body_h}" rx="{card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
+    parts.append(text_block(text_x + 20, body_y + 34, split_text(lead.get("heading", ""), 18)[:2], 20, theme["text"], "700"))
+    item_y = body_y + 66
+    for item in lead.get("items", [])[:6]:
+        parts.append(f'<circle cx="{text_x + 24}" cy="{item_y - 6}" r="4" fill="{theme["accent"]}"/>')
+        parts.append(text_block(text_x + 38, item_y, split_text(str(item), 22)[:2], typography.get("body_size", 18), theme["text"]))
+        item_y += typography.get("body_size", 18) + 18
+    footer_mode = str(layout_config.get("summary_footer", "compact")).strip().lower()
+    if footer_mode == "inline_compact" and len(sections) > 1:
+        summary = " / ".join(section.get("heading", "") for section in sections[1:3] if section.get("heading"))
+        if summary:
+            parts.append(text_block(text_x + 20, body_y + body_h - 34, split_text(summary, 34)[:2], 14, theme["muted_text"], "600"))
+
+
+def _append_template_footer_summary(
+    parts: list[str],
+    sections: list[dict[str, Any]],
+    body_x: int,
+    footer_y: int,
+    body_w: int,
+    theme: dict[str, str],
+) -> None:
+    extras = " / ".join(section.get("heading", "") for section in sections[2:5] if section.get("heading"))
+    if not extras:
+        return
+    parts.append(f'<line x1="{body_x}" y1="{footer_y + 6}" x2="{body_x + body_w}" y2="{footer_y + 6}" stroke="{theme["border"]}" stroke-width="1"/>')
+    parts.append(text_block(body_x + 8, footer_y + 28, split_text(extras, 56)[:2], 14, theme["muted_text"], "600"))
 
 
 def _render_government_slide_svg(
@@ -769,6 +1539,8 @@ def strategy_to_design_spec(strategy: dict[str, Any], image_inventory: list[dict
         chart_line = f'- **Chart**: {page.get("chart_type")}\n' if page.get("chart_type") else ""
         pages_md.append(
             f"#### Slide {page['index']:02d} - {page['title']}\n\n"
+            f"- **Page Role**: {page.get('page_type', 'content')}\n"
+            f"- **Content Archetype**: {page.get('content_archetype', 'empty')}\n"
             f"- **Layout**: {page.get('layout', 'content')}\n"
             f"- **Title**: {page['title']}\n"
             f"- **Subtitle**: {page.get('subtitle', '')}\n"

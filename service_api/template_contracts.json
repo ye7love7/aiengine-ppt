@@ -1,0 +1,317 @@
+{
+  "default_family": "generic",
+  "families": {
+    "generic": {
+      "page_files": {
+        "cover": ["01_cover.svg"],
+        "toc": ["02_toc.svg", "02_chapter.svg"],
+        "chapter": ["02_chapter.svg", "03_content.svg"],
+        "content": ["03_content.svg"],
+        "ending": ["04_ending.svg"]
+      },
+      "content_layouts": {
+        "shared": {
+          "outer_pad": 24
+        },
+        "kpi_row": {
+          "card_gap": 16,
+          "card_height": 84,
+          "card_radius": 14,
+          "label_size": 14,
+          "value_size": 24,
+          "consumed_height": 104
+        },
+        "lead_cards": {
+          "lead_height_multi": 124,
+          "lead_height_single_max": 172,
+          "card_radius": 16,
+          "sub_card_radius": 14,
+          "section_gap": 18,
+          "sub_gap": 16,
+          "kpi_zone": "none",
+          "summary_footer": "none"
+        },
+        "dual_column": {
+          "gap": 18,
+          "card_radius": 16,
+          "header_bar_height": 8,
+          "summary_footer": "compact"
+        },
+        "list_grid": {
+          "cols": 2,
+          "gap": 18,
+          "card_radius": 16
+        },
+        "image_left_text_right": {
+          "image_ratio": 0.36,
+          "gap": 20,
+          "image_height_ratio": 0.78,
+          "card_radius": 16,
+          "image_side": "left",
+          "summary_footer": "compact"
+        }
+      },
+      "semantic_overrides": {},
+      "aliases": {}
+    },
+    "academic": {
+      "page_files": {
+        "cover": ["01_cover.svg"],
+        "toc": ["02_toc.svg", "02_chapter.svg"],
+        "chapter": ["02_chapter.svg", "03_content.svg"],
+        "content": ["03_content.svg"],
+        "ending": ["04_ending.svg"]
+      },
+      "semantic_overrides": {
+        "advisor": "project_name",
+        "institution": "organization_or_audience_or_project_name",
+        "department": "use_case_or_audience",
+        "email": "source"
+      },
+      "aliases": {
+        "chapter_desc": ["CHAPTER_DESC"],
+        "ending_subtitle": ["ENDING_SUBTITLE"],
+        "contact_info": ["CONTACT_INFO"],
+        "copyright": ["COPYRIGHT"],
+        "institution": ["INSTITUTION"],
+        "department": ["DEPARTMENT"],
+        "advisor": ["ADVISOR"],
+        "email": ["EMAIL"],
+        "section_name": ["SECTION_NAME"],
+        "section_num": ["SECTION_NUM"],
+        "key_message": ["KEY_MESSAGE"],
+        "source": ["SOURCE"],
+        "logo": ["LOGO"]
+      }
+    },
+    "consulting": {
+      "page_files": {
+        "cover": ["01_cover.svg"],
+        "toc": ["02_toc.svg", "02_chapter.svg"],
+        "chapter": ["02_chapter.svg", "03_content.svg"],
+        "content": ["03_content.svg"],
+        "ending": ["04_ending.svg"]
+      },
+      "content_layouts": {
+        "lead_cards": {
+          "lead_height_multi": 136,
+          "lead_height_single_max": 188,
+          "section_gap": 20,
+          "summary_footer": "compact"
+        },
+        "dual_column": {
+          "gap": 22,
+          "summary_footer": "compact"
+        },
+        "image_left_text_right": {
+          "image_side": "right",
+          "summary_footer": "compact"
+        }
+      },
+      "semantic_overrides": {
+        "contact_info": "highlight_or_core_message",
+        "contact_line_2": "source"
+      },
+      "aliases": {
+        "chapter_desc": ["CHAPTER_DESC"],
+        "ending_subtitle": ["ENDING_SUBTITLE"],
+        "contact_name": ["CONTACT_NAME"],
+        "contact_info": ["CONTACT_INFO"],
+        "copyright": ["COPYRIGHT"]
+      }
+    },
+    "government": {
+      "page_files": {
+        "cover": ["01_cover.svg"],
+        "toc": ["02_toc.svg", "02_chapter.svg"],
+        "chapter": ["02_chapter.svg", "03_content.svg"],
+        "content": ["03_content.svg"],
+        "ending": ["04_ending.svg"]
+      },
+      "content_layouts": {
+        "lead_cards": {
+          "lead_height_multi": 118,
+          "section_gap": 16,
+          "kpi_zone": "top",
+          "summary_footer": "none"
+        },
+        "dual_column": {
+          "gap": 16,
+          "header_bar_height": 10,
+          "summary_footer": "none"
+        }
+      },
+      "semantic_overrides": {
+        "organization": "organization_or_audience_or_project_name",
+        "contact_info": "highlight_or_core_message",
+        "thank_you_en": "subtitle_or_literal_thank_you"
+      },
+      "aliases": {
+        "chapter_subtitle": ["CHAPTER_SUBTITLE"],
+        "organization": ["ORGANIZATION"],
+        "thank_you_en": ["THANK_YOU_EN"],
+        "contact_info": ["CONTACT_INFO"]
+      }
+    },
+    "cn_corporate": {
+      "page_files": {
+        "cover": ["01_cover.svg"],
+        "toc": ["02_toc.svg", "02_chapter.svg"],
+        "chapter": ["02_chapter.svg", "03_content.svg"],
+        "content": ["03_content.svg"],
+        "ending": ["04_ending.svg"]
+      },
+      "semantic_overrides": {
+        "author_en": "project_slug_upper",
+        "logo_header": "project_short",
+        "logo_large": "project_short",
+        "website": "source",
+        "contact_info": "highlight_or_core_message"
+      },
+      "aliases": {
+        "chapter_subtitle": ["CHAPTER_SUBTITLE"],
+        "chapter_desc": ["CHAPTER_DESC"],
+        "ending_subtitle": ["ENDING_SUBTITLE"],
+        "thank_you_en": ["THANK_YOU_EN"],
+        "closing_message": ["CLOSING_MESSAGE"],
+        "contact_info": ["CONTACT_INFO"],
+        "author_en": ["AUTHOR_EN"],
+        "logo_header": ["LOGO_HEADER"],
+        "logo_large": ["LOGO_LARGE"],
+        "logo": ["LOGO"],
+        "website": ["WEBSITE"],
+        "institution": ["INSTITUTION"],
+        "department": ["DEPARTMENT"],
+        "source": ["SOURCE"],
+        "stat_label_1": ["STAT_1_LABEL", "STAT_LABEL_1"],
+        "stat_label_2": ["STAT_2_LABEL", "STAT_LABEL_2"],
+        "stat_label_3": ["STAT_3_LABEL"],
+        "stat_number_1": ["STAT_1", "STAT_NUMBER_1"],
+        "stat_number_2": ["STAT_2", "STAT_NUMBER_2"],
+        "stat_number_3": ["STAT_3", "STAT_NUMBER_3"]
+      }
+    },
+    "psychology": {
+      "page_files": {
+        "cover": ["01_cover.svg"],
+        "toc": ["02_toc.svg", "02_chapter.svg"],
+        "chapter": ["02_chapter.svg", "03_content.svg"],
+        "content": ["03_content.svg"],
+        "ending": ["04_ending.svg"]
+      },
+      "semantic_overrides": {
+        "cover_bg_image": "image_filename",
+        "quote": "highlight_or_goal_or_title",
+        "quote_author": "project_name",
+        "contact_line_2": "source",
+        "title_en": "subtitle_or_use_case",
+        "chapter_en": "subtitle_or_use_case"
+      },
+      "aliases": {
+        "chapter_en": ["CHAPTER_EN"],
+        "closing_message": ["CLOSING_MESSAGE"],
+        "contact_info": ["CONTACT_INFO"],
+        "contact_line_2": ["CONTACT_LINE_2"],
+        "thank_you_en": ["THANK_YOU_EN"],
+        "title_en": ["TITLE_EN"],
+        "quote": ["QUOTE"],
+        "quote_author": ["QUOTE_AUTHOR"],
+        "cover_bg_image": ["COVER_BG_IMAGE"],
+        "goal_1": ["GOAL_1"],
+        "goal_1_desc": ["GOAL_1_DESC"],
+        "goal_2": ["GOAL_2"],
+        "goal_2_desc": ["GOAL_2_DESC"],
+        "goal_3": ["GOAL_3"],
+        "goal_3_desc": ["GOAL_3_DESC"],
+        "goal_4": ["GOAL_4"],
+        "goal_4_desc": ["GOAL_4_DESC"],
+        "tag_1": ["TAG_1"],
+        "tag_2": ["TAG_2"],
+        "tag_3": ["TAG_3"],
+        "tag_4": ["TAG_4"]
+      }
+    },
+    "pixel_retro": {
+      "page_files": {
+        "cover": ["01_cover.svg"],
+        "toc": ["02_toc.svg", "02_chapter.svg"],
+        "chapter": ["02_chapter.svg", "03_content.svg"],
+        "content": ["03_content.svg"],
+        "ending": ["04_ending.svg"]
+      },
+      "content_layouts": {
+        "lead_cards": {
+          "lead_height_multi": 130,
+          "summary_footer": "compact"
+        },
+        "list_grid": {
+          "gap": 20
+        },
+        "image_left_text_right": {
+          "image_side": "left",
+          "summary_footer": "compact"
+        }
+      },
+      "semantic_overrides": {
+        "chapter_title_en": "subtitle_or_use_case",
+        "cta_text": "core_message_or_highlight_or_title",
+        "contact_info": "highlight_or_core_message"
+      },
+      "aliases": {
+        "chapter_title_en": ["CHAPTER_TITLE_EN"],
+        "ending_subtitle": ["END_SUBTITLE"],
+        "cta_text": ["CTA_TEXT"],
+        "contact_info": ["CONTACT_INFO"],
+        "summary_1_title": ["SUMMARY_1_TITLE"],
+        "summary_1_line_1": ["SUMMARY_1_LINE_1"],
+        "summary_1_line_2": ["SUMMARY_1_LINE_2"],
+        "summary_1_line_3": ["SUMMARY_1_LINE_3"],
+        "summary_1_stat": ["SUMMARY_1_STAT"],
+        "summary_2_title": ["SUMMARY_2_TITLE"],
+        "summary_2_line_1": ["SUMMARY_2_LINE_1"],
+        "summary_2_line_2": ["SUMMARY_2_LINE_2"],
+        "summary_2_line_3": ["SUMMARY_2_LINE_3"],
+        "summary_2_stat": ["SUMMARY_2_STAT"],
+        "summary_3_title": ["SUMMARY_3_TITLE"],
+        "summary_3_line_1": ["SUMMARY_3_LINE_1"],
+        "summary_3_line_2": ["SUMMARY_3_LINE_2"],
+        "summary_3_line_3": ["SUMMARY_3_LINE_3"],
+        "summary_3_stat": ["SUMMARY_3_STAT"],
+        "feature_1": ["FEATURE_1"],
+        "feature_2": ["FEATURE_2"],
+        "feature_3": ["FEATURE_3"],
+        "feature_4": ["FEATURE_4"],
+        "compare_a": ["COMPARE_A"],
+        "compare_b": ["COMPARE_B"],
+        "row_1_a": ["ROW_1_A"],
+        "row_1_b": ["ROW_1_B"],
+        "row_2_a": ["ROW_2_A"],
+        "row_2_b": ["ROW_2_B"],
+        "row_3_a": ["ROW_3_A"],
+        "row_3_b": ["ROW_3_B"]
+      }
+    }
+  },
+  "templates": {
+    "academic_defense": "academic",
+    "ai_ops": "consulting",
+    "anthropic": "consulting",
+    "exhibit": "consulting",
+    "google_style": "consulting",
+    "government_blue": "government",
+    "government_red": "government",
+    "mckinsey": "consulting",
+    "medical_university": "academic",
+    "pixel_retro": "pixel_retro",
+    "psychology_attachment": "psychology",
+    "smart_red": "government",
+    "中国电建_常规": "cn_corporate",
+    "中国电建_现代": "cn_corporate",
+    "中汽研_商务": "cn_corporate",
+    "中汽研_常规": "cn_corporate",
+    "中汽研_现代": "cn_corporate",
+    "招商银行": "cn_corporate",
+    "科技蓝商务": "cn_corporate",
+    "重庆大学": "academic"
+  }
+}

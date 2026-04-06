@@ -9,6 +9,19 @@ uvicorn service_api.main:app --host 0.0.0.0 --port 8000
 # http://127.0.0.1:8000/frontend
 ```
 
+### 一键启动脚本
+
+- Windows: `start_windows.bat`
+- Ubuntu: `start_ubuntu.sh`
+
+说明：
+
+- 两个脚本不会创建 `.venv`
+- 不会自动安装任何依赖
+- 只检查当前环境中的 `python/python3` 与 `uvicorn` 是否可用
+- 自动启动 FastAPI 服务
+- Ubuntu 如需导入 `docx/epub/latex`，还需要系统安装 `pandoc`
+
 ## Frontend
 
 当前默认前端为面向普通用户的上传页：
@@ -39,6 +52,10 @@ uvicorn service_api.main:app --host 0.0.0.0 --port 8000
 
 Examples are exposed as a read-only sample library.
 Tasks may also pass `example_reference` to use one example as a style reference during generation.
+If both `template_name` and `example_reference` are provided, the explicit template takes precedence and the example is treated as a secondary style hint.
+The runtime now follows `template_name > style_mode -> default template > fallback renderer`.
+When a template is available, SVG generation is template-skeleton driven (`cover/toc/content/ending`); `style_mode` mainly routes to a default template when the user did not pick one.
+Template-family routing, placeholder contracts, family-level semantic overrides, and content-archetype layout parameters are now maintained in `service_api/template_contracts.json`.
 
 ## Auth
 

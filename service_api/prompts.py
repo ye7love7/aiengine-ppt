@@ -39,6 +39,7 @@ Return a JSON object with this schema:
     {
       "index": 1,
       "page_type": "cover|toc|chapter|content|ending",
+      "content_archetype": "lead_cards|dual_column|kpi_row|list_grid|image_left_text_right|empty",
       "title": "string",
       "subtitle": "string",
       "layout": "string",
@@ -54,6 +55,7 @@ Rules:
 - Page count must match pages length.
 - Slide 1 must be cover, last slide must be ending.
 - Add a toc page when it improves readability.
+- Every page must include `content_archetype`. Use `empty` for cover/toc/chapter/ending unless a different archetype is clearly needed.
 - Keep bullets concise and presentation-ready.
 - If the user requested a preferred style, respect it unless it is clearly incompatible.
 - If an example style profile is supplied in the prompt, treat it as a strong visual constraint and do not drift back to generic styling.

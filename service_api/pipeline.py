@@ -199,7 +199,9 @@ def _run_strategist(task_id: str, project_path: Path, request_data: dict[str, An
     example_context = load_example_prompt_context(example_reference) if example_reference else None
     example_profile = extract_example_style_profile(resolve_example_dir(example_reference)) if example_reference else None
     style_source = request_data.get("style_source") or ("example_strong" if example_reference else "prompt_reference")
-    style_locked = bool(example_reference and style_source == "example_strong")
+    template_name = _normalize_template_name(request_data.get("template_name"))
+    template_locked = bool(template_name)
+    style_locked = bool(example_reference and style_source == "example_strong" and not template_locked)
 
     prefer_style = request_data.get("prefer_style") or "auto"
     if style_locked and example_profile and example_profile.get("style_tag"):
@@ -207,13 +209,17 @@ def _run_strategist(task_id: str, project_path: Path, request_data: dict[str, An
     elif prefer_style == "auto" and example_context and example_context.get("suggested_style") in TEMPLATE_BY_STYLE:
         prefer_style = str(example_context["suggested_style"])
     style_hint = prefer_style if prefer_style != "auto" else "auto based on document type"
-    template_name = _normalize_template_name(request_data.get("template_name"))
     ignored_template_name = ""
     if style_locked:
         if template_name:
             ignored_template_name = template_name
             STORE.append_log(task_id, f"Example strong reference enabled; ignoring explicit template {template_name}")
         template_name = _normalize_template_name(example_profile.get("recommended_template") if example_profile else "")
+    elif template_name and example_reference:
+        STORE.append_log(
+            task_id,
+            f"Explicit template {template_name} selected; example reference {example_reference} kept only as a secondary style hint.",
+        )
     if template_name:
         _copy_template(project_path, template_name)
 
@@ -247,6 +253,13 @@ Example README excerpt:
 Example design_spec excerpt:
 {example_context['design_spec_excerpt'] or 'N/A'}
 """
+    if template_name and example_reference:
+        prompt += f"""
+
+Template precedence constraints:
+- The user explicitly selected template `{template_name}`. Treat this template as the primary layout and composition constraint.
+- The example reference may influence tone and detail rhythm, but it must not override or replace the selected template.
+"""
     if style_locked and example_profile:
         prompt += f"""
 
@@ -268,6 +281,7 @@ Hard example-strong constraints:
     strategy["style_locked"] = style_locked
     strategy["example_style_profile"] = example_profile or {}
     strategy["canvas_format"] = request_data["canvas_format"]
+    strategy["project_name"] = request_data["project_name"]
     if style_locked and example_profile:
         locked_style = str(example_profile.get("style_tag") or prefer_style or "general")
         strategy["style_mode"] = locked_style
@@ -279,10 +293,15 @@ Hard example-strong constraints:
         strategy["style_mode"] = _normalize_style(strategy.get("style_mode"), prefer_style)
         llm_template_name = _normalize_template_name(strategy.get("template_name"))
         strategy["template_name"] = _resolve_existing_template_name(
-            llm_template_name or template_name or TEMPLATE_BY_STYLE.get(strategy.get("style_mode", "general"), ""),
+            template_name or llm_template_name or TEMPLATE_BY_STYLE.get(strategy.get("style_mode", "general"), ""),
             strategy["style_mode"],
         )
-        if llm_template_name and llm_template_name != strategy["template_name"]:
+        if template_name and llm_template_name and llm_template_name != strategy["template_name"]:
+            STORE.append_log(
+                task_id,
+                f"Strategist proposed template '{llm_template_name}', but explicit template '{strategy['template_name']}' takes precedence.",
+            )
+        elif llm_template_name and llm_template_name != strategy["template_name"]:
             STORE.append_log(
                 task_id,
                 f"Strategist proposed unknown template '{llm_template_name}', falling back to '{strategy['template_name'] or 'no template'}'.",
@@ -361,11 +380,19 @@ Current page plan: {json.dumps(page, ensure_ascii=False)}
         blueprint["image_filename"] = _normalize_image_choice(blueprint.get("image_filename", ""), image_files)
         blueprint["sections"] = _normalize_sections(blueprint.get("sections") or [], page)
         blueprint["kpis"] = _normalize_kpis(blueprint.get("kpis") or [])
+        blueprint["content_archetype"] = page.get("content_archetype") or _normalize_content_archetype(
+            blueprint.get("content_archetype"),
+            page["page_type"],
+            page.get("layout", ""),
+            blueprint["sections"],
+            blueprint["kpis"],
+            blueprint["image_filename"],
+        )
         blueprint["speaker_notes"] = blueprint.get("speaker_notes") or page.get("goal", page["title"])
         blueprint["key_points"] = blueprint.get("key_points") or page.get("bullets", [])[:3]
         blueprint["duration_minutes"] = float(blueprint.get("duration_minutes") or 1.0)
 
-        svg_content = render_slide_svg(blueprint, strategy, project_path / "images")
+        svg_content = render_slide_svg(blueprint, strategy, project_path / "images", project_path / "templates")
         (project_path / "svg_output" / f"{blueprint['file_stem']}.svg").write_text(svg_content, encoding="utf-8")
         slides.append(blueprint)
         previous_summary = blueprint["title"]
@@ -552,6 +579,14 @@ def _normalize_pages(strategy: dict[str, Any]) -> list[dict[str, Any]]:
             {
                 "index": index,
                 "page_type": page_type,
+                "content_archetype": _normalize_content_archetype(
+                    page.get("content_archetype"),
+                    page_type,
+                    page.get("layout") or "content",
+                    page.get("sections") or [],
+                    page.get("kpis") or [],
+                    page.get("image_filename") or "",
+                ),
                 "title": title,
                 "subtitle": page.get("subtitle") or "",
                 "layout": page.get("layout") or "content",
@@ -565,9 +600,9 @@ def _normalize_pages(strategy: dict[str, Any]) -> list[dict[str, Any]]:
         )
     if not normalized:
         normalized = [
-            {"index": 1, "page_type": "cover", "title": strategy.get("presentation_title", "Presentation"), "subtitle": "", "layout": "cover", "goal": "Introduce the topic", "bullets": [], "chart_type": "", "image_filename": "", "file_stem": "01_cover"},
-            {"index": 2, "page_type": "content", "title": "Overview", "subtitle": "", "layout": "content", "goal": "Summarize the key points", "bullets": ["Background", "Current state", "Recommendation"], "chart_type": "", "image_filename": "", "file_stem": "02_overview"},
-            {"index": 3, "page_type": "ending", "title": "Conclusion", "subtitle": "", "layout": "ending", "goal": "Close with the core message", "bullets": ["Action items"], "chart_type": "", "image_filename": "", "file_stem": "03_conclusion"},
+            {"index": 1, "page_type": "cover", "content_archetype": "empty", "title": strategy.get("presentation_title", "Presentation"), "subtitle": "", "layout": "cover", "goal": "Introduce the topic", "bullets": [], "chart_type": "", "image_filename": "", "file_stem": "01_cover"},
+            {"index": 2, "page_type": "content", "content_archetype": "lead_cards", "title": "Overview", "subtitle": "", "layout": "content", "goal": "Summarize the key points", "bullets": ["Background", "Current state", "Recommendation"], "chart_type": "", "image_filename": "", "file_stem": "02_overview"},
+            {"index": 3, "page_type": "ending", "content_archetype": "empty", "title": "Conclusion", "subtitle": "", "layout": "ending", "goal": "Close with the core message", "bullets": ["Action items"], "chart_type": "", "image_filename": "", "file_stem": "03_conclusion"},
         ]
     normalized[0]["page_type"] = "cover"
     normalized[0]["file_stem"] = "01_cover"
@@ -575,6 +610,42 @@ def _normalize_pages(strategy: dict[str, Any]) -> list[dict[str, Any]]:
     if not normalized[-1]["file_stem"].startswith(f"{normalized[-1]['index']:02d}_"):
         normalized[-1]["file_stem"] = f"{normalized[-1]['index']:02d}_{slugify(normalized[-1]['title'])}"
     return normalized[:8]
+
+
+def _normalize_content_archetype(
+    value: Any,
+    page_type: str,
+    layout: str,
+    sections: list[dict[str, Any]] | list[Any],
+    kpis: list[dict[str, Any]] | list[Any],
+    image_filename: str,
+) -> str:
+    allowed = {"lead_cards", "dual_column", "kpi_row", "list_grid", "image_left_text_right", "empty"}
+    text = str(value or "").strip().lower()
+    if text in allowed:
+        return text
+
+    if page_type != "content":
+        return "empty"
+
+    layout_text = str(layout or "").strip().lower()
+    if "three_column" in layout_text or "grid" in layout_text:
+        return "list_grid"
+    if "split" in layout_text or "two_column" in layout_text or "dual" in layout_text:
+        return "dual_column"
+    if "timeline" in layout_text:
+        return "lead_cards"
+
+    if image_filename:
+        return "image_left_text_right"
+    if kpis:
+        return "kpi_row"
+    section_count = len(sections or [])
+    if section_count >= 3:
+        return "list_grid"
+    if section_count == 2:
+        return "dual_column"
+    return "lead_cards"
 
 
 def _normalize_sections(sections: list[dict[str, Any]], page: dict[str, Any]) -> list[dict[str, Any]]:

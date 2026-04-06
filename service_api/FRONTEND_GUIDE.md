@@ -107,7 +107,9 @@ GET /api/v1/templates
 ### 说明
 
 - 页面会把模板名展示为下拉选项
-- 如果用户选择了 `example_reference`，前端会自动清空并禁用 `template_name`
+- 字段优先级建议使用：`template_name > example_reference > auto`
+- 如果用户同时选择了 `template_name` 和 `example_reference`，前端应保留模板值，并提示样例仅作辅助风格参考，不覆盖模板
+- 后端主链路已改为模板骨架驱动：显式模板直接驱动 `cover/toc/content/ending` 骨架；未选模板时先由 `style_mode` 路由默认模板，再按模板骨架生成
 
 ## 3. 创建任务
 
@@ -213,4 +215,7 @@ POST /api/v1/tasks/{task_id}/cancel
 - 不支持 AI 图片生成
 - 样例库是只读的
 - `example_reference` 只作为风格参考，不表示复用原样例内容
+- `style_mode` 的职责是路由默认模板，不再作为主渲染入口；主渲染入口是项目 `templates/` 下的模板骨架
+- 页面角色按 `cover / toc / chapter / content / ending` 选骨架，内容页再由 `content_archetype` 决定模板内容区内的排版方式
+- 模板族路由、占位符契约、模板族语义覆盖规则以及 `content_archetype` 布局参数由后端配置文件 `service_api/template_contracts.json` 统一维护
 - `svg_pptx`、`design_spec`、日志等仍保留在后端，但不在用户版主界面展示

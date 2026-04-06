@@ -120,7 +120,7 @@ def list_examples() -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for path in sorted(SETTINGS.examples_root.iterdir(), key=lambda item: item.name.lower()):
         if path.is_dir():
-            results.append(_build_example_metadata(path))
+            results.append(_build_example_metadata(path, include_style_profile=False))
     return results
 
 
@@ -258,11 +258,18 @@ def resolve_example_dir(name: str) -> Path:
     return candidate
 
 
-def _build_example_metadata(example_dir: Path) -> dict[str, Any]:
+def _build_example_metadata(example_dir: Path, include_style_profile: bool = True) -> dict[str, Any]:
     svg_dir = example_dir / "svg_final"
     if not svg_dir.exists():
         svg_dir = example_dir / "svg_output"
-    style_profile = extract_example_style_profile(example_dir) if (example_dir / "design_spec.md").exists() else None
+    if (example_dir / "design_spec.md").exists():
+        style_profile = (
+            extract_example_style_profile(example_dir)
+            if include_style_profile
+            else _build_lightweight_style_profile(example_dir)
+        )
+    else:
+        style_profile = None
     return {
         "name": example_dir.name,
         "title": example_dir.name,
@@ -281,6 +288,32 @@ def _build_example_metadata(example_dir: Path) -> dict[str, Any]:
         "style_confidence": style_profile["style_confidence"] if style_profile else 0.0,
         "style_reason": style_profile["style_reason"] if style_profile else "",
         "can_extract_svg": bool(style_profile and style_profile["can_extract_svg"]),
+    }
+
+
+def _build_lightweight_style_profile(example_dir: Path) -> dict[str, Any]:
+    suggested_style = _infer_style(example_dir.name)
+    style_tag = suggested_style
+    recommended_template = _resolve_recommended_template(style_tag, example_dir.name)
+    cached = _peek_cached_style_classification(example_dir.name)
+    if cached:
+        style_tag = str(cached.get("style_tag") or style_tag)
+        recommended_template = str(cached.get("recommended_template") or recommended_template)
+        return {
+            "style_tag": style_tag,
+            "recommended_template": recommended_template,
+            "style_source": str(cached.get("style_source") or "cached"),
+            "style_confidence": float(cached.get("confidence") or 0.0),
+            "style_reason": str(cached.get("reason") or ""),
+            "can_extract_svg": False,
+        }
+    return {
+        "style_tag": style_tag,
+        "recommended_template": recommended_template,
+        "style_source": "rule_fallback",
+        "style_confidence": 0.0,
+        "style_reason": "List view uses lightweight local style inference.",
+        "can_extract_svg": False,
     }
 
 
@@ -444,6 +477,18 @@ def _build_example_classifier_fingerprint(example_dir: Path, design_spec_text: s
 def _style_cache_path(example_name: str) -> Path:
     safe_name = re.sub(r"[^0-9A-Za-z_\u4e00-\u9fff-]+", "_", example_name).strip("_") or "example"
     return SETTINGS.example_style_cache_root / f"{safe_name}.json"
+
+
+def _peek_cached_style_classification(example_name: str) -> dict[str, Any] | None:
+    path = _style_cache_path(example_name)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    result = payload.get("result")
+    return result if isinstance(result, dict) else None
 
 
 def _load_cached_style_classification(example_name: str, fingerprint: str) -> dict[str, Any] | None:
