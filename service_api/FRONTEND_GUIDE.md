@@ -1,64 +1,235 @@
-# 前端对接文档
+# Frontend / Gateway 对接说明
 
-## 概览
+这份文档面向主项目后端或网关服务。典型接入方式是：
 
-当前仓库默认提供一个面向普通用户的上传页：
+- 主项目接收用户请求
+- 主项目把请求转发到本服务 `service_api`
+- 主项目轮询任务状态并回传给自己的前端
 
-- 页面文件：`service_api/frontend.html`
-- 页面定位：上传文档、选样例风格、查看状态、下载最终 PPT
+当前服务的主链路已经支持两种输入模式：
 
-后端 API 仍然保留完整能力，但用户版页面默认只走这条主链路：
+- `upload`：上传源文件
+- `inline`：直接传入纯文本 / Markdown / 提纲内容
 
-1. 调用 `GET /api/v1/examples` 获取样例风格
-2. 调用 `GET /api/v1/templates` 获取模板列表
-3. 调用 `POST /api/v1/tasks` 以 `multipart/form-data` 创建任务
-4. 轮询 `GET /api/v1/tasks/{task_id}` 获取状态
-5. 任务完成后调用 `GET /api/v1/tasks/{task_id}/artifacts`
-6. 找到 `native_pptx`
-7. 调用 `GET /api/v1/tasks/{task_id}/download/native_pptx` 下载最终文件
+## 1. 总体流程
 
-所有 `/api/v1/*` 接口默认不要求前端显式传 Bearer Token。  
-如果有鉴权要求，建议在上游网关或转发服务处理。
+标准调用顺序：
 
-## 用户版页面默认交互
+1. `GET /api/v1/examples`
+2. `GET /api/v1/templates`
+3. `POST /api/v1/tasks`
+4. 轮询 `GET /api/v1/tasks/{task_id}`
+5. 成功后调用 `GET /api/v1/tasks/{task_id}/artifacts`
+6. 下载 `GET /api/v1/tasks/{task_id}/download/native_pptx`
 
-### 保留的表单字段
+主项目如果不需要样例库或模板列表，也可以只调用：
 
+1. `POST /api/v1/tasks`
+2. `GET /api/v1/tasks/{task_id}`
+3. `GET /api/v1/tasks/{task_id}/download/native_pptx`
+
+## 2. 模板与样例优先级
+
+控制逻辑固定为：
+
+- `template_name > example_reference > auto`
+
+含义：
+
+- 用户显式选择 `template_name` 时，最终按模板骨架驱动生成
+- 用户未选模板但选择了 `example_reference` 时，会按样例强参考锁定风格，并路由到样例推荐模板
+- 两者都没有时，系统根据内容自动判断风格并路由默认模板
+
+如果同时传了：
+
+- `template_name`
+- `example_reference`
+
+则行为是：
+
+- 模板优先
+- 样例只作为辅助风格参考，不覆盖模板
+
+## 3. 创建任务
+
+接口：
+
+```http
+POST /api/v1/tasks
+```
+
+支持两种请求形态：
+
+- `application/json`
+- `multipart/form-data`
+
+### 3.1 JSON 模式
+
+适合主项目后端已经拿到文本内容，不再需要上传文件。
+
+#### `path` 模式
+
+```json
+{
+  "source_mode": "path",
+  "project_name": "demo",
+  "canvas_format": "ppt169",
+  "template_name": "exhibit",
+  "example_reference": null,
+  "style_source": "prompt_reference",
+  "audience": "领导",
+  "use_case": "汇报",
+  "core_message": "总结重点",
+  "prefer_style": "auto",
+  "notes_style": "formal",
+  "output_formats": ["native_pptx", "svg_pptx"],
+  "source_files": ["sample.md"],
+  "image_files": []
+}
+```
+
+#### `inline` 模式
+
+这是本次新增的直贴文本能力，推荐主项目后端优先使用。
+
+```json
+{
+  "source_mode": "inline",
+  "project_name": "demo",
+  "canvas_format": "ppt169",
+  "template_name": null,
+  "example_reference": "ppt169_像素风_git_introduction",
+  "style_source": "example_strong",
+  "audience": "领导",
+  "use_case": "汇报",
+  "core_message": null,
+  "prefer_style": "auto",
+  "notes_style": "formal",
+  "output_formats": ["native_pptx", "svg_pptx"],
+  "source_text": "# 汇报提纲\n\n这里直接放 Markdown 或纯文本"
+}
+```
+
+规则：
+
+- `source_mode=inline` 时必须提供非空 `source_text`
+- `source_text` 推荐直接传 UTF-8 文本
+- 文本内容可以是：
+  - Markdown
+  - Word 复制出的纯文本
+  - 汇报提纲
+  - 已清洗的网页正文
+
+### 3.2 Multipart 模式
+
+适合浏览器直接上传文件，或主项目需要同时上传图片。
+
+#### `upload` 模式
+
+字段：
+
+- `source_mode=upload`
 - `project_name`
 - `canvas_format`
-- `example_reference`
 - `template_name`
-- `prefer_style`
+- `example_reference`
+- `style_source`
 - `audience`
 - `use_case`
 - `core_message`
+- `prefer_style`
+- `notes_style`
+- `output_formats`
 - `source_files`
 - `image_files`
 
-### 页面不再默认暴露
+#### `inline` 模式
 
-- `source_mode=path`
-- `GET /api/v1/materials` 的素材浏览
-- 完整产物列表
-- 运行日志区
-- `svg_pptx / design_spec / svg_output / svg_final / run_log` 主界面下载入口
+如果主项目要同时传文本和图片，也可以用 multipart：
 
-### 页面默认隐藏但仍提交的字段
+- `source_mode=inline`
+- `source_text`
+- `image_files`
 
-- `notes_style = formal`
-- `output_formats = ["native_pptx", "svg_pptx"]`
+说明：
 
-## 基本概念
+- `inline` 模式下不要求 `source_files`
+- `image_files` 仍会被保存并参与生成
 
-### 任务状态 `status`
+## 4. 字段说明
 
-- `queued`：已接收，等待执行
-- `running`：正在执行
-- `succeeded`：执行成功
-- `failed`：执行失败
-- `cancelled`：已取消
+### 基本字段
 
-### 任务阶段 `stage`
+- `project_name`
+  - 可空
+  - 为空时服务端自动生成
+
+- `canvas_format`
+  - 当前常用值：`ppt169`、`ppt43`
+
+- `audience`
+  - 可空
+  - 例如：`领导`、`客户`、`专家`
+
+- `use_case`
+  - 可空
+  - 例如：`汇报`、`答辩`、`宣讲`
+
+- `core_message`
+  - 可空
+  - 用于强调想表达的核心结论
+
+### 风格相关
+
+- `template_name`
+  - 显式模板约束
+  - 一旦提供，优先级最高
+
+- `example_reference`
+  - 样例参考
+  - 主要用于风格锁定和模板路由
+
+- `style_source`
+  - 常用值：
+    - `prompt_reference`
+    - `example_strong`
+  - 推荐规则：
+    - 有 `example_reference` 时传 `example_strong`
+    - 没有样例时传 `prompt_reference`
+
+- `prefer_style`
+  - 常用值：
+    - `auto`
+    - `general`
+    - `consulting`
+    - `consulting_top`
+
+### 输出相关
+
+- `notes_style`
+  - 当前建议固定 `formal`
+
+- `output_formats`
+  - 当前建议固定：
+    - `["native_pptx", "svg_pptx"]`
+
+## 5. 任务状态
+
+接口：
+
+```http
+GET /api/v1/tasks/{task_id}
+```
+
+常见 `status`：
+
+- `queued`
+- `running`
+- `succeeded`
+- `failed`
+- `cancelled`
+
+常见 `stage`：
 
 - `queued`
 - `ingest`
@@ -68,154 +239,89 @@
 - `postprocess`
 - `export`
 - `completed`
-- `failed`
-- `cancelled`
 
-### 可选链路追踪请求头
+建议：
 
-上游系统如果希望把当前用户透传给 PPT 服务，可选传以下任一请求头：
+- 轮询间隔 2 到 5 秒
+- 当 `status` 进入 `succeeded / failed / cancelled` 时停止轮询
 
-- `X-Request-User-Id`
-- `X-User-Id`
-- `X-Forwarded-User-Id`
+## 6. 获取产物与下载
 
-如果传了，后端会把用户 ID 记录到任务状态和 `run.log`。
-
-## 1. 查看样例库
-
-### 请求
-
-```http
-GET /api/v1/examples
-```
-
-### 说明
-
-- 这是只读样例库
-- 用户版页面会把它作为“选风格”入口
-- `example_reference` 由用户手动选择
-- `style_tag` 和 `recommended_template` 是系统解析结果，不是用户输入
-
-## 2. 查看模板列表
-
-### 请求
-
-```http
-GET /api/v1/templates
-```
-
-### 说明
-
-- 页面会把模板名展示为下拉选项
-- 字段优先级建议使用：`template_name > example_reference > auto`
-- 如果用户同时选择了 `template_name` 和 `example_reference`，前端应保留模板值，并提示样例仅作辅助风格参考，不覆盖模板
-- 后端主链路已改为模板骨架驱动：显式模板直接驱动 `cover/toc/content/ending` 骨架；未选模板时先由 `style_mode` 路由默认模板，再按模板骨架生成
-
-## 3. 创建任务
-
-用户版页面默认固定使用：
-
-- `source_mode = upload`
-
-请求类型：
-
-```http
-POST /api/v1/tasks
-Content-Type: multipart/form-data
-```
-
-### 表单字段
-
-- `source_mode=upload`
-- `project_name`
-- `canvas_format`
-- `template_name`：可选
-- `example_reference`：可选
-- `style_source`
-- `audience`：可选
-- `use_case`：可选
-- `core_message`：可选
-- `prefer_style`
-- `notes_style`：固定 `formal`
-- `output_formats`：固定 `["native_pptx","svg_pptx"]`
-- `source_files`：一个或多个源文档
-- `image_files`：零个或多个图片
-
-### 响应
-
-```json
-{
-  "task_id": "2e9f7b1d9a4f4ef18f0e4bb7aa7f0f43",
-  "status": "queued",
-  "stage": "queued"
-}
-```
-
-## 4. 查询任务状态
-
-### 请求
-
-```http
-GET /api/v1/tasks/{task_id}
-```
-
-### 用户版页面关心的字段
-
-- `status`
-- `stage`
-- `created_at`
-- `updated_at`
-- `error`
-
-### 前端建议
-
-- 轮询间隔建议 `2-5 秒`
-- 当 `status` 变成 `succeeded`、`failed`、`cancelled` 时停止轮询
-- 如果失败，优先展示 `error`
-
-## 5. 获取任务产物
-
-### 请求
+产物列表：
 
 ```http
 GET /api/v1/tasks/{task_id}/artifacts
 ```
 
-### 用户版页面默认只关心
-
-- `native_pptx`
-
-如果还需要内部或调试产物，可由其他页面或上游系统再单独接入。
-
-## 6. 下载最终 PPT
-
-### 请求
+最终下载：
 
 ```http
 GET /api/v1/tasks/{task_id}/download/native_pptx
 ```
 
-### 说明
+主项目如果只关心最终 PPT，只需要读取：
 
-- 用户版页面只突出展示 `native_pptx`
-- 如果任务完成但没有该产物，页面应提示“未找到最终 PPT 文件”
+- `native_pptx`
 
-## 7. 取消任务
+## 7. 透传用户 ID
 
-### 请求
+如果主项目希望把上游用户身份记录到本服务，可传以下任一请求头：
 
-```http
-POST /api/v1/tasks/{task_id}/cancel
-```
+- `X-Request-User-Id`
+- `X-User-Id`
+- `X-Forwarded-User-Id`
 
-## 限制说明
+服务端会把它记录到：
 
-- 用户版页面默认不支持目录引用
-- 不支持 URL 输入
-- 不支持 AI 图片生成
-- 样例库是只读的
-- `example_reference` 只作为风格参考，不表示复用原样例内容
-- `style_mode` 的职责是路由默认模板，不再作为主渲染入口；主渲染入口是项目 `templates/` 下的模板骨架
-- 页面角色按 `cover / toc / chapter / content / ending` 选骨架，内容页再由 `content_archetype` 决定模板内容区内的排版方式
-- 模板族路由、占位符契约、模板族语义覆盖规则以及 `content_archetype` 布局参数由后端配置文件 `service_api/template_contracts.json` 统一维护
-- `svg_pptx`、`design_spec`、日志等仍保留在后端，但不在用户版主界面展示
+- 任务状态
+- `run.log`
+
+## 8. 错误处理建议
+
+### 常见 400
+
+- `Example not found`
+  - 样例名无效
+
+- `Inline requests require non-empty source_text`
+  - `source_mode=inline` 但没传有效文本
+
+- `No valid uploaded source files were received`
+  - `source_mode=upload` 但没有有效上传源文件，或文件是 0 B
+
+### 常见 404
+
+- `Task not found`
+- `Artifact not found`
+
+## 9. 推荐给主项目后端的接法
+
+如果主项目本身已经能拿到用户输入文本，推荐直接走：
+
+- `source_mode=inline`
+- `source_text=<正文>`
+
+原因：
+
+- 不必先人为生成临时 docx/md 再上传
+- 能减少一次文件落地和转换
+- 与当前服务内部逻辑一致，因为最终也会统一转成文本语料进入 Strategist / Executor
+
+只有在以下场景再使用 `upload`：
+
+- 用户确实上传了原始 docx/pdf
+- 主项目不想自己提取文本
+- 需要保留原始文件作为输入来源
+
+## 10. 当前边界
+
+- 本服务已经支持模板骨架驱动生成
+- `template_name` 是主模板约束，不再只是提示字段
+- `style_mode` 的职责主要是路由默认模板，不再是主渲染入口
+- `inline` 模式会进入与上传模式相同的主生成链路
+
+如果主项目需要，我也可以再补一份更偏“转发服务接入”的示例代码，分别给：
+
+- Python / FastAPI
+- Node / Express
+- Java / Spring Boot

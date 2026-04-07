@@ -74,7 +74,7 @@ async def create_task(request: Request) -> TaskCreateResponse:
 
     upstream_user_id = _extract_upstream_user_id(request)
     state = STORE.create_task(task_request, upstream_user_id=upstream_user_id)
-    if task_request.source_mode == "upload":
+    if form is not None:
         assert form is not None
         print(f"[create_task] persisting uploads for task_id={state.task_id}", flush=True)
         _persist_uploads(form, state.task_id)
@@ -170,16 +170,19 @@ async def _parse_json_task_request(request: Request) -> TaskCreateRequest:
     body["project_name"] = _ensure_project_name(body.get("project_name"))
     body["style_source"] = _ensure_style_source(body.get("style_source"), body.get("example_reference"))
     model = TaskCreateRequest.model_validate(body)
-    if model.source_mode != "path":
-        raise HTTPException(status_code=400, detail="JSON requests only support source_mode=path")
+    if model.source_mode not in {"path", "inline"}:
+        raise HTTPException(status_code=400, detail="JSON requests only support source_mode=path or source_mode=inline")
+    if model.source_mode == "inline" and not str(model.source_text or "").strip():
+        raise HTTPException(status_code=400, detail="Inline requests require non-empty source_text")
     _validate_example_reference_or_400(model.example_reference)
     return model
 
 
 def _parse_multipart_task_request(form: FormData) -> TaskCreateRequest:
+    source_mode = form.get("source_mode", "upload")
     example_reference = form.get("example_reference") or None
     payload = {
-        "source_mode": form.get("source_mode", "upload"),
+        "source_mode": source_mode,
         "project_name": _ensure_project_name(form.get("project_name", "")),
         "canvas_format": form.get("canvas_format", "ppt169"),
         "template_name": form.get("template_name") or None,
@@ -191,12 +194,15 @@ def _parse_multipart_task_request(form: FormData) -> TaskCreateRequest:
         "prefer_style": form.get("prefer_style", "auto"),
         "notes_style": form.get("notes_style", "formal"),
         "output_formats": _coerce_list_field(form.get("output_formats")) or ["native_pptx", "svg_pptx"],
+        "source_text": form.get("source_text") or None,
         "source_files": [],
         "image_files": [],
     }
     model = TaskCreateRequest.model_validate(payload)
-    if model.source_mode != "upload":
-        raise HTTPException(status_code=400, detail="Multipart requests only support source_mode=upload")
+    if model.source_mode not in {"upload", "inline"}:
+        raise HTTPException(status_code=400, detail="Multipart requests only support source_mode=upload or source_mode=inline")
+    if model.source_mode == "inline" and not str(model.source_text or "").strip():
+        raise HTTPException(status_code=400, detail="Inline requests require non-empty source_text")
     _validate_example_reference_or_400(model.example_reference)
     return model
 
@@ -246,7 +252,8 @@ def _persist_uploads(form: FormData, task_id: str) -> None:
         f"valid_source_files={valid_source_count}; valid_image_files={valid_image_count}",
     )
 
-    if valid_source_count == 0:
+    source_mode = str(form.get("source_mode", "upload") or "upload")
+    if source_mode == "upload" and valid_source_count == 0:
         raise HTTPException(
             status_code=400,
             detail="No valid uploaded source files were received; multipart source_files may be missing or 0 B",

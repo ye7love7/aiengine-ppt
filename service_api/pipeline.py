@@ -141,6 +141,19 @@ def _resolve_inputs(task_id: str, request_data: dict[str, Any]) -> tuple[list[Pa
         if not source_paths:
             raise ValueError("At least one source file is required")
         return source_paths, image_paths
+    if source_mode == "inline":
+        source_text = str(request_data.get("source_text") or "").strip()
+        if not source_text:
+            raise ValueError("Inline mode requires non-empty source_text")
+        uploads_dir = STORE.uploads_dir(task_id)
+        source_dir = uploads_dir / "source_files"
+        image_dir = uploads_dir / "image_files"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        image_dir.mkdir(parents=True, exist_ok=True)
+        inline_path = source_dir / "inline_input.md"
+        inline_path.write_text(source_text, encoding="utf-8")
+        image_paths = sorted(image_dir.glob("*"))
+        return [inline_path], image_paths
 
     uploads_dir = STORE.uploads_dir(task_id)
     source_paths = sorted((uploads_dir / "source_files").glob("*"))

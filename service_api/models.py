@@ -19,7 +19,7 @@ TaskStage = Literal[
     "failed",
     "cancelled",
 ]
-SourceMode = Literal["path", "upload"]
+SourceMode = Literal["path", "upload", "inline"]
 PreferStyle = Literal["general", "consulting", "consulting_top", "auto"]
 OutputFormat = Literal["native_pptx", "svg_pptx"]
 StyleSource = Literal["prompt_reference", "example_strong"]
@@ -38,6 +38,7 @@ class TaskCreateRequest(BaseModel):
     prefer_style: PreferStyle = "auto"
     notes_style: str = "formal"
     output_formats: list[OutputFormat] = Field(default_factory=lambda: ["native_pptx", "svg_pptx"])
+    source_text: Optional[str] = None
     source_files: list[str] = Field(default_factory=list)
     image_files: list[str] = Field(default_factory=list)
 

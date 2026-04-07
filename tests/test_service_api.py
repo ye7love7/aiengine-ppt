@@ -956,6 +956,71 @@ class ServiceApiTests(unittest.TestCase):
             shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
             shutil.rmtree(SETTINGS.uploads_root / task_id, ignore_errors=True)
 
+    def test_create_task_accepts_inline_json_source_text(self) -> None:
+        payload = {
+            "source_mode": "inline",
+            "project_name": "inline-json-demo",
+            "canvas_format": "ppt169",
+            "prefer_style": "auto",
+            "notes_style": "formal",
+            "output_formats": ["native_pptx", "svg_pptx"],
+            "source_text": "# Title\n\nDirect inline content",
+            "image_files": [],
+        }
+        with patch("service_api.main.run_task", lambda task_id: None):
+            response = self.client.post("/api/v1/tasks", json=payload)
+        self.assertEqual(response.status_code, 200)
+        task_id = response.json()["task_id"]
+        try:
+            state_payload = self.client.get(f"/api/v1/tasks/{task_id}").json()
+            self.assertEqual(state_payload["request"]["source_mode"], "inline")
+            self.assertIn("Direct inline content", state_payload["request"]["source_text"])
+        finally:
+            shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
+            shutil.rmtree(SETTINGS.uploads_root / task_id, ignore_errors=True)
+
+    def test_create_task_rejects_blank_inline_json_source_text(self) -> None:
+        payload = {
+            "source_mode": "inline",
+            "project_name": "inline-json-empty",
+            "canvas_format": "ppt169",
+            "prefer_style": "auto",
+            "notes_style": "formal",
+            "output_formats": ["native_pptx", "svg_pptx"],
+            "source_text": "   ",
+            "image_files": [],
+        }
+        response = self.client.post("/api/v1/tasks", json=payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("source_text", response.text)
+
+    def test_create_task_accepts_multipart_inline_source_text(self) -> None:
+        data = {
+            "source_mode": "inline",
+            "project_name": "inline-multipart-demo",
+            "canvas_format": "ppt169",
+            "prefer_style": "auto",
+            "notes_style": "formal",
+            "output_formats": '["native_pptx","svg_pptx"]',
+            "source_text": "# Inline\n\nMultipart text body",
+        }
+        files = [
+            ("image_files", ("cover.png", io.BytesIO(b"png-content"), "image/png")),
+        ]
+        with patch("service_api.main.run_task", lambda task_id: None):
+            response = self.client.post("/api/v1/tasks", data=data, files=files)
+        self.assertEqual(response.status_code, 200)
+        task_id = response.json()["task_id"]
+        try:
+            state_payload = self.client.get(f"/api/v1/tasks/{task_id}").json()
+            self.assertEqual(state_payload["request"]["source_mode"], "inline")
+            self.assertIn("Multipart text body", state_payload["request"]["source_text"])
+            image_uploaded = SETTINGS.uploads_root / task_id / "image_files" / "cover.png"
+            self.assertTrue(image_uploaded.exists())
+        finally:
+            shutil.rmtree(SETTINGS.jobs_root / task_id, ignore_errors=True)
+            shutil.rmtree(SETTINGS.uploads_root / task_id, ignore_errors=True)
+
     def test_normalize_template_name_treats_auto_as_empty(self) -> None:
         self.assertEqual(_normalize_template_name("auto"), "")
         self.assertEqual(_normalize_template_name("AUTO"), "")
