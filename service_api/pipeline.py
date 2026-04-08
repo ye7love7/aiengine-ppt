@@ -77,6 +77,7 @@ def run_task(task_id: str) -> None:
         summary = manager.import_sources(str(project_path), [str(path) for path in source_paths], move=False)
         STORE.write_stage_metadata(task_id, "ingest", summary)
         _copy_images(project_path, image_paths)
+        _ensure_markdown_sources_imported(project_path, summary, request_data)
         STORE.append_log(task_id, f"Imported {len(source_paths)} source files and {len(image_paths)} images")
         _check_cancel(task_id)
 
@@ -417,13 +418,49 @@ Current page plan: {json.dumps(page, ensure_ascii=False)}
 
 def _collect_source_text(project_path: Path) -> str:
     chunks: list[str] = []
-    for path in sorted((project_path / "sources").glob("*.md")):
+    for path in _iter_markdown_sources(project_path / "sources"):
         content = path.read_text(encoding="utf-8", errors="replace")
         chunks.append(f"## {path.name}\n{content[:SETTINGS.max_source_chars]}")
     if not chunks:
         raise ValueError("No markdown sources found after import")
     combined = "\n\n".join(chunks)
     return combined[:SETTINGS.max_source_chars]
+
+
+def _iter_markdown_sources(sources_dir: Path) -> list[Path]:
+    markdown_paths: list[Path] = []
+    for pattern in ("*.md", "*.markdown"):
+        markdown_paths.extend(sources_dir.glob(pattern))
+    return sorted({path.resolve(): path for path in markdown_paths}.values(), key=lambda path: path.name)
+
+
+def _ensure_markdown_sources_imported(
+    project_path: Path,
+    summary: dict[str, Any],
+    request_data: dict[str, Any],
+) -> None:
+    markdown_paths = _iter_markdown_sources(project_path / "sources")
+    if markdown_paths:
+        return
+
+    source_names = [Path(str(item)).name for item in request_data.get("source_files") or []]
+    source_mode = str(request_data.get("source_mode") or "upload")
+    diagnostics: list[str] = []
+    diagnostics.extend(str(item) for item in (summary.get("skipped") or [])[:3])
+    diagnostics.extend(str(item) for item in (summary.get("notes") or [])[:2])
+
+    message = "No markdown sources were generated during import."
+    if source_names:
+        message += f" Sources: {', '.join(source_names)}."
+    if diagnostics:
+        message += f" Details: {' | '.join(diagnostics)}."
+    elif source_mode == "upload":
+        message += " The uploaded document was archived, but conversion did not produce any .md or .markdown file."
+
+    if any(Path(name).suffix.lower() in DOC_SUFFIXES for name in source_names):
+        message += " Check the document conversion toolchain (for example pandoc) and whether the source document can be converted."
+
+    raise ValueError(message)
 
 
 def _copy_template(project_path: Path, template_name: str) -> None:
@@ -708,9 +745,35 @@ def _run_script(task_id: str, command: list[str]) -> None:
         errors="replace",
         check=False,
     )
-    if result.stdout.strip():
-        STORE.append_log(task_id, result.stdout.strip())
-    if result.stderr.strip():
-        STORE.append_log(task_id, result.stderr.strip())
+    stdout_text = _normalize_export_command_output(command, result.stdout)
+    stderr_text = _normalize_export_command_output(command, result.stderr)
+    if stdout_text.strip():
+        STORE.append_log(task_id, stdout_text.strip())
+    if stderr_text.strip():
+        STORE.append_log(task_id, stderr_text.strip())
     if result.returncode != 0:
         raise RuntimeError(f"Command failed ({result.returncode}): {' '.join(command)}")
+
+
+def _normalize_export_command_output(command: list[str], output: str) -> str:
+    if not output.strip():
+        return ""
+    command_text = " ".join(command)
+    if "svg_to_pptx.py" not in command_text:
+        return output
+
+    lines = [line for line in output.splitlines() if line.strip()]
+    gradient_warnings = [line for line in lines if "Can't handle color: url(#" in line]
+    if not gradient_warnings:
+        return output
+
+    remaining = [line for line in lines if "Can't handle color: url(#" not in line]
+    warning_summary = (
+        f"Legacy SVG-image export emitted {len(gradient_warnings)} gradient fallback warning(s). "
+        "This usually means the legacy PNG renderer cannot rasterize SVG gradient fills like url(#grad). "
+        "Native PPTX export is unaffected. Install cairosvg for better legacy rendering, or request only native_pptx to skip SVG-image export."
+    )
+    if remaining:
+        remaining.append(warning_summary)
+        return "\n".join(remaining)
+    return warning_summary

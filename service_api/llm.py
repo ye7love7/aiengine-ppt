@@ -106,8 +106,15 @@ class LLMClient:
             return response
         raise ValueError("LLM response is not serializable")
 
-    def _parse_json(self, content: str) -> dict[str, Any]:
+    def _strip_reasoning_and_fences(self, content: str) -> str:
         stripped = content.strip()
+        stripped = re.sub(r"<think\b[^>]*>.*?</think\s*>", "", stripped, flags=re.IGNORECASE | re.DOTALL).strip()
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+        return stripped.strip()
+
+    def _parse_json(self, content: str) -> dict[str, Any]:
+        stripped = self._strip_reasoning_and_fences(content)
         if stripped.startswith("{") and stripped.endswith("}"):
             return json.loads(stripped)
 

@@ -12,8 +12,16 @@ from fastapi.testclient import TestClient
 
 from service_api.config import SETTINGS  # noqa: E402
 from service_api.examples import extract_example_style_profile, resolve_example_dir  # noqa: E402
+from service_api.llm import LLMClient  # noqa: E402
 from service_api.main import app  # noqa: E402
-from service_api.pipeline import _normalize_content_archetype, _normalize_template_name, _run_strategist  # noqa: E402
+from service_api.pipeline import (  # noqa: E402
+    _collect_source_text,
+    _ensure_markdown_sources_imported,
+    _normalize_export_command_output,
+    _normalize_content_archetype,
+    _normalize_template_name,
+    _run_strategist,
+)
 from service_api.rendering import (  # noqa: E402
     TEMPLATE_CONTRACTS,
     TEMPLATE_CONTRACT_REGISTRY_PATH,
@@ -78,6 +86,22 @@ class ServiceApiTests(unittest.TestCase):
     def setUp(self) -> None:
         shutil.rmtree(SETTINGS.example_style_cache_root, ignore_errors=True)
         SETTINGS.example_style_cache_root.mkdir(parents=True, exist_ok=True)
+
+    def test_llm_parse_json_strips_think_block(self) -> None:
+        client = LLMClient()
+        payload = client._parse_json("<think>internal reasoning</think>{\"ok\": true}")
+        self.assertEqual(payload, {"ok": True})
+
+    def test_llm_parse_json_strips_json_fence(self) -> None:
+        client = LLMClient()
+        payload = client._parse_json("```json\n{\"status\": \"ok\"}\n```")
+        self.assertEqual(payload, {"status": "ok"})
+
+    def test_llm_parse_json_ignores_braces_inside_think_block(self) -> None:
+        client = LLMClient()
+        content = "<think>{\"draft\": true}</think>\n{\"final\": 1}"
+        payload = client._parse_json(content)
+        self.assertEqual(payload, {"final": 1})
 
     def test_materials_is_public(self) -> None:
         response = self.client.get("/api/v1/materials")
@@ -1026,6 +1050,50 @@ class ServiceApiTests(unittest.TestCase):
         self.assertEqual(_normalize_template_name("AUTO"), "")
         self.assertEqual(_normalize_template_name("none"), "")
         self.assertEqual(_normalize_template_name("smart_red"), "smart_red")
+
+    def test_collect_source_text_accepts_markdown_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_path = Path(tmpdir)
+            sources_dir = project_path / "sources"
+            sources_dir.mkdir(parents=True, exist_ok=True)
+            (sources_dir / "sample.markdown").write_text("# Title\n\nBody", encoding="utf-8")
+            collected = _collect_source_text(project_path)
+        self.assertIn("sample.markdown", collected)
+        self.assertIn("Body", collected)
+
+    def test_ensure_markdown_sources_imported_raises_with_import_details(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_path = Path(tmpdir)
+            (project_path / "sources").mkdir(parents=True, exist_ok=True)
+            summary = {
+                "archived": [str(project_path / "sources" / "input.docx")],
+                "markdown": [],
+                "assets": [],
+                "notes": [],
+                "skipped": ["input.docx: document conversion failed (pandoc not found)"],
+            }
+            request_data = {
+                "source_mode": "upload",
+                "source_files": ["input.docx"],
+            }
+            with self.assertRaises(ValueError) as ctx:
+                _ensure_markdown_sources_imported(project_path, summary, request_data)
+        self.assertIn("input.docx", str(ctx.exception))
+        self.assertIn("pandoc", str(ctx.exception))
+
+    def test_normalize_export_command_output_collapses_gradient_warnings(self) -> None:
+        command = ["python", "skills/ppt-master/scripts/svg_to_pptx.py", "demo", "-s", "final"]
+        output = "\n".join(
+            [
+                "Can't handle color: url(#coverBgGrad)",
+                "Can't handle color: url(#topGrad)",
+                "[Done] Saved: demo.pptx",
+            ]
+        )
+        normalized = _normalize_export_command_output(command, output)
+        self.assertIn("[Done] Saved: demo.pptx", normalized)
+        self.assertIn("gradient fallback warning(s)", normalized)
+        self.assertNotIn("url(#coverBgGrad)", normalized)
 
 
 if __name__ == "__main__":
