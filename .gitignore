@@ -9,6 +9,7 @@ Icon
 .AppleDouble
 .LSOverride
 
+
 # Windows
 Thumbs.db
 Thumbs.db:encryptable
@@ -84,6 +85,8 @@ drafts/
 notes/
 scratch/
 .notes/
+docs/
+runtime/
 
 # Test files
 test_output/
@@ -177,3 +180,4 @@ service_data/materials/images/
 !service_data/materials/docs/.gitkeep
 !service_data/materials/images/.gitkeep
 service_data/example_style_cache/
+runtime/service_api.pid

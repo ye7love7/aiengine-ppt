@@ -28,6 +28,7 @@ from service_api.rendering import (  # noqa: E402
     _build_template_placeholders,
     _get_template_layout_config,
     _get_template_contract,
+    _fit_text,
     render_slide_svg,
     split_text,
 )
@@ -112,6 +113,12 @@ class ServiceApiTests(unittest.TestCase):
         lines = split_text("这是一个用于验证中文标题自动换行的较长字符串", 10)
         self.assertGreater(len(lines), 1)
         self.assertTrue(all(len(line) <= 10 for line in lines))
+
+    def test_fit_text_respects_box_and_shrinks_mixed_text(self) -> None:
+        lines, size = _fit_text("中文 mixed text 2026 with a deliberately long heading", 220, 62, 24, 12, 3)
+        self.assertLessEqual(size, 24)
+        self.assertLessEqual(len(lines) * int(size * 1.45), 62)
+        self.assertLessEqual(len(lines), 3)
 
     def test_materials_is_public(self) -> None:
         response = self.client.get("/api/v1/materials")

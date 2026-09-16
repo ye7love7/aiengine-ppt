@@ -192,12 +192,12 @@
 
             <div class="grid two">
               <div class="field">
-                <label for="templateName">模板名</label>
+                <label for="templateName">模板名（二选一）</label>
                 <select id="templateName"><option value="">自动选择或不指定</option></select>
                 <div id="templateHint" class="hint"></div>
               </div>
               <div class="field">
-                <label for="exampleReference">样例选择</label>
+                <label for="exampleReference">样例选择（二选一）</label>
                 <select id="exampleReference"><option value="">不指定样例</option></select>
                 <div id="exampleHint" class="hint"></div>
               </div>
@@ -371,8 +371,15 @@
       els.sourceUploads.addEventListener("change", refreshSourceHint);
       els.sourceText.addEventListener("input", refreshSourceHint);
       els.imageUploads.addEventListener("change", refreshSourceHint);
-      els.templateName.addEventListener("change", refreshModeHint);
-      els.exampleReference.addEventListener("change", refreshModeHint);
+      els.templateName.addEventListener("change", () => {
+        // 模板与样例都是主风格来源，互斥可避免用户误以为两者会叠加。
+        if (nullable(els.templateName.value)) els.exampleReference.value = "";
+        refreshModeHint();
+      });
+      els.exampleReference.addEventListener("change", () => {
+        if (nullable(els.exampleReference.value)) els.templateName.value = "";
+        refreshModeHint();
+      });
     }
 
     async function apiFetch(path, options = {}) {
@@ -447,10 +454,7 @@
         els.exampleHint.textContent = "";
       }
 
-      if (selectedTemplate && selectedExample) {
-        els.modeHint.className = "info-banner";
-        els.modeHint.textContent = `当前同时选择了模板和样例。系统将优先按模板 ${selectedTemplate} 生成；样例 ${selectedExample} 仅作为辅助风格参考。`;
-      } else if (selectedTemplate) {
+      if (selectedTemplate) {
         els.modeHint.className = "info-banner";
         els.modeHint.textContent = `当前按模板生成：${selectedTemplate}。页面骨架将优先继承该模板。`;
       } else if (selectedExample) {

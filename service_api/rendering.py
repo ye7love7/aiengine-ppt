@@ -120,6 +120,30 @@ def _wrap_to_width(text: str, width: float, size: int) -> list[str]:
     return lines
 
 
+def _fit_text(text: Any, width: int, height: int, preferred_size: int, min_size: int = 12,
+              max_lines: int | None = None) -> tuple[list[str], int]:
+    """Wrap text by estimated pixel width and shrink until it fits the box."""
+    value = str(text or "").strip()
+    if not value:
+        return [], preferred_size
+    for size in range(max(int(preferred_size), min_size), min_size - 1, -1):
+        lines = _wrap_to_width(value, max(1, width), size)
+        if max_lines and len(lines) > max_lines:
+            continue
+        if len(lines) * int(size * 1.45) <= max(1, height):
+            return lines, size
+    size = min_size
+    lines = _wrap_to_width(value, max(1, width), size)
+    allowed = max(1, int(height / max(1, int(size * 1.45))))
+    if max_lines:
+        allowed = min(allowed, max_lines)
+    if len(lines) > allowed:
+        lines = lines[:allowed]
+        if lines:
+            lines[-1] = (lines[-1].rstrip(" .，。；;、") + "…")
+    return lines, size
+
+
 def _append_section_text(parts: list[str], section: dict[str, Any], x: int, y: int,
                          width: int, height: int, theme: dict[str, str],
                          typography: dict[str, Any], title_size: int = 20) -> None:
@@ -860,12 +884,14 @@ def _append_template_lead_cards_layout(
     section_gap = int(layout_config.get("section_gap", 18))
     sub_gap = int(layout_config.get("sub_gap", 16))
     parts.append(f'<rect x="{body_x}" y="{body_y}" width="{body_w}" height="{lead_h}" rx="{card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
-    parts.append(text_block(body_x + 22, body_y + 34, split_text(lead.get("heading", ""), 22)[:2], 20, theme["text"], "700"))
-    bullet_y = body_y + 66
+    heading_lines, heading_size = _fit_text(lead.get("heading", ""), body_w - 44, 42, 20, 14, 2)
+    parts.append(text_block(body_x + 22, body_y + 28 + heading_size, heading_lines, heading_size, theme["text"], "700"))
+    bullet_y = body_y + 66 + max(0, len(heading_lines) - 1) * int(heading_size * 1.45)
     for item in lead.get("items", [])[:4]:
         parts.append(f'<circle cx="{body_x + 28}" cy="{bullet_y - 6}" r="4" fill="{theme["primary"]}"/>')
-        parts.append(text_block(body_x + 42, bullet_y, split_text(str(item), 44)[:2], typography.get("body_size", 18), theme["text"]))
-        bullet_y += 38
+        lines, size = _fit_text(item, body_w - 66, max(24, body_y + lead_h - bullet_y - 8), int(typography.get("body_size", 18)), 13, 3)
+        parts.append(text_block(body_x + 42, bullet_y, lines, size, theme["text"]))
+        bullet_y += len(lines) * int(size * 1.45) + 8
 
     remaining = sections[1:4]
     if not remaining:
@@ -878,12 +904,14 @@ def _append_template_lead_cards_layout(
         card_x = body_x + idx * (sub_w + sub_gap)
         card_h = max(120, body_h - lead_h - section_gap)
         parts.append(f'<rect x="{card_x}" y="{sub_y}" width="{sub_w}" height="{card_h}" rx="{sub_card_radius}" fill="{theme["secondary_background"]}" stroke="{theme["border"]}" stroke-width="1"/>')
-        parts.append(text_block(card_x + 18, sub_y + 30, split_text(section.get("heading", ""), 16)[:2], 17, theme["text"], "700"))
-        item_y = sub_y + 58
+        heading_lines, heading_size = _fit_text(section.get("heading", ""), sub_w - 36, 38, 17, 13, 2)
+        parts.append(text_block(card_x + 18, sub_y + 24 + heading_size, heading_lines, heading_size, theme["text"], "700"))
+        item_y = sub_y + 54 + max(0, len(heading_lines) - 1) * int(heading_size * 1.45)
         for item in section.get("items", [])[:4]:
             parts.append(f'<circle cx="{card_x + 22}" cy="{item_y - 6}" r="3.5" fill="{theme["accent"]}"/>')
-            parts.append(text_block(card_x + 34, item_y, split_text(str(item), 20)[:2], 14, theme["text"]))
-            item_y += 30
+            lines, size = _fit_text(item, sub_w - 52, max(18, sub_y + card_h - item_y - 6), 14, 11, 3)
+            parts.append(text_block(card_x + 34, item_y, lines, size, theme["text"]))
+            item_y += len(lines) * int(size * 1.45) + 6
 
 
 def _append_template_dual_column_layout(
@@ -1090,7 +1118,8 @@ def _render_government_slide_svg(
                 x += 248
 
     else:
-        parts.append(text_block(84, 118, split_text(title, 22), 28, primary, "700"))
+        title_lines, title_size = _fit_text(title, width - 420, 56, 28, 18, 2)
+        parts.append(text_block(84, 118, title_lines, title_size, primary, "700"))
         if subtitle:
             parts.append(text_block(84, 156, split_text(subtitle, 32), 16, muted, "500"))
         parts.append(f'<line x1="84" y1="178" x2="{width - 84}" y2="178" stroke="{accent}" stroke-width="2"/>')
@@ -1102,12 +1131,14 @@ def _render_government_slide_svg(
             lead = sections[0]
             parts.append(f'<rect x="84" y="206" width="{width - 168}" height="118" fill="{bg}" stroke="{border}" stroke-width="1"/>')
             parts.append(f'<rect x="84" y="206" width="8" height="118" fill="{accent}"/>')
-            parts.append(text_block(110, 242, split_text(lead.get("heading", ""), 20), 20, primary, "700"))
-            bullet_y = 274
+            lead_lines, lead_size = _fit_text(lead.get("heading", ""), width - 230, 38, 20, 14, 2)
+            parts.append(text_block(110, 220 + lead_size, lead_lines, lead_size, primary, "700"))
+            bullet_y = 274 + max(0, len(lead_lines) - 1) * int(lead_size * 1.45)
             for item in lead.get("items", [])[:4]:
                 parts.append(f'<rect x="110" y="{bullet_y - 12}" width="8" height="8" fill="{secondary}"/>')
-                parts.append(text_block(128, bullet_y, split_text(item, 42), body_size, text, "500"))
-                bullet_y += body_size + 18
+                lines, fitted_size = _fit_text(item, width - 250, max(20, 324 - bullet_y), body_size, 13, 3)
+                parts.append(text_block(128, bullet_y, lines, fitted_size, text, "500"))
+                bullet_y += len(lines) * int(fitted_size * 1.45) + 8
 
         small_y = 344
         for idx, section in enumerate(sections[1:5], start=1):
@@ -1118,10 +1149,12 @@ def _render_government_slide_svg(
             box_w = (width - 184) // 2
             parts.append(f'<rect x="{x}" y="{y}" width="{box_w}" height="110" fill="{panel}" stroke="{border}" stroke-width="1"/>')
             parts.append(f'<rect x="{x}" y="{y}" width="8" height="110" fill="{primary if idx > 2 else secondary}"/>')
-            parts.append(text_block(x + 24, y + 32, split_text(section.get("heading", ""), 18), 18, primary, "700"))
+            heading_lines, heading_size = _fit_text(section.get("heading", ""), box_w - 42, 34, 18, 13, 2)
+            parts.append(text_block(x + 24, y + 20 + heading_size, heading_lines, heading_size, primary, "700"))
             items = section.get("items", [])[:3]
             if items:
-                parts.append(text_block(x + 24, y + 60, split_text(" / ".join(items), 28), 14, muted, "500"))
+                item_lines, item_size = _fit_text(" / ".join(items), box_w - 42, 42, 14, 11, 2)
+                parts.append(text_block(x + 24, y + 52 + max(0, len(heading_lines) - 1) * int(heading_size * 1.45), item_lines, item_size, muted, "500"))
 
         if kpis:
             x = 84
@@ -1236,12 +1269,14 @@ def _render_consulting_slide_svg(
             if sections:
                 lead = sections[0]
                 parts.append(f'<rect x="{left_x}" y="214" width="{panel_w}" height="{panel_h}" rx="{panel_radius}" fill="{bg}" stroke="{border}" stroke-width="1"/>')
-                parts.append(text_block(left_x + 24, 252, split_text(lead.get("heading", ""), 18), 22, primary, "700"))
-                bullet_y = 292
+                lead_heading, lead_heading_size = _fit_text(lead.get("heading", ""), panel_w - 48, 46, 22, 15, 2)
+                parts.append(text_block(left_x + 24, 214 + 24 + lead_heading_size, lead_heading, lead_heading_size, primary, "700"))
+                bullet_y = 292 + max(0, len(lead_heading) - 1) * int(lead_heading_size * 1.45)
                 for item in lead.get("items", [])[:5]:
                     parts.append(f'<rect x="{left_x + 24}" y="{bullet_y - 14}" width="10" height="10" fill="{accent}"/>')
-                    parts.append(text_block(left_x + 46, bullet_y, split_text(item, 22), body_size, text, "500"))
-                    bullet_y += body_size + 22
+                    lines, fitted_size = _fit_text(item, panel_w - 74, max(24, 214 + panel_h - bullet_y - 10), body_size, 13, 3)
+                    parts.append(text_block(left_x + 46, bullet_y, lines, fitted_size, text, "500"))
+                    bullet_y += len(lines) * int(fitted_size * 1.45) + 12
             stack_y = 214
             for idx, section in enumerate(sections[1:4], start=1):
                 box_h = 96
