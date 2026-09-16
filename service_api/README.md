@@ -22,6 +22,22 @@ uvicorn service_api.main:app --host 0.0.0.0 --port 8000
 - 自动启动 FastAPI 服务
 - Ubuntu 如需导入 `docx/epub/latex`，还需要系统安装 `pandoc`
 
+### 查看日志
+
+```bat
+logs_windows.bat
+logs_windows.bat --lines 200 --follow
+logs_windows.bat --job <任务ID>
+```
+
+```bash
+./logs_ubuntu.sh
+./logs_ubuntu.sh --lines 200 --follow
+./logs_ubuntu.sh --job <任务ID>
+```
+
+Windows 默认读取 `runtime/service_api.out.log` 和 `runtime/service_api.err.log`；Ubuntu 默认读取 `runtime/service_api.log`。任务日志位于 `service_data/jobs/<任务ID>/run.log`。日志目录可通过 `PPT_SERVICE_LOG_DIR`、`PPT_SERVICE_LOG_FILE` 和 `PPT_SERVICE_JOBS_DIR` 覆盖。
+
 ## Frontend
 
 当前默认前端为面向普通用户的上传页：
@@ -77,3 +93,7 @@ If present, the value is recorded in task state and `run.log`.
 - Frontend integration: `service_api/FRONTEND_GUIDE.md`
 - User frontend page: `service_api/frontend.html`
 - Dedicated API deps: `api_requirements.txt`
+
+### ��������
+
+Windows��estart_windows.bat��Ubuntu��./restart_ubuntu.sh���ɸ��� --foreground �� --background���ű�����ֹͣ����������

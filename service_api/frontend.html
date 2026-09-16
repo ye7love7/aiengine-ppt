@@ -1,566 +1,803 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Offline PPT Master 生成页</title>
+  <title>智文通——PPT生成 测试页</title>
   <style>
-    :root{--bg:#f5efe6;--paper:rgba(255,250,244,.9);--line:rgba(55,67,54,.14);--ink:#1d2420;--muted:#68746b;--accent:#be5f3f;--accent2:#2f6253;--ok:#267b57;--warn:#c98124;--bad:#ba4138;--shadow:0 18px 54px rgba(42,33,24,.12);--radius:22px}
-    *{box-sizing:border-box}body{margin:0;font-family:"Microsoft YaHei","PingFang SC",sans-serif;color:var(--ink);background:radial-gradient(circle at top left,#fff7ee,transparent 30%),linear-gradient(180deg,#f8f3ea,#eee4d6)}
-    button,input,select,textarea{font:inherit}button{cursor:pointer}
-    .shell{max-width:1160px;margin:0 auto;padding:24px;display:grid;gap:20px}
-    .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(18px);padding:22px}
-    .hero h1{margin:0 0 10px;font:600 40px/1.02 Georgia,"Times New Roman",serif}
-    .hero p,.hint,.tiny{margin:0;color:var(--muted);line-height:1.7}.tiny{font-size:12px}
-    .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.section-head h2{margin:0;font-size:18px}
-    .status{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(47,98,83,.08);color:var(--accent2);font-size:13px;font-weight:700}.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
-    .grid{display:grid;gap:14px}.grid.two{grid-template-columns:1fr 1fr}.field{display:grid;gap:8px}.field label{font-size:13px;color:var(--muted);font-weight:600}
-    input,select,textarea{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.86);color:var(--ink);outline:none}
-    textarea{min-height:96px;resize:vertical}
-    input:focus,select:focus,textarea:focus{border-color:rgba(190,95,63,.45);box-shadow:0 0 0 4px rgba(190,95,63,.1)}
-    button{border:none;border-radius:16px;padding:12px 16px;transition:.18s ease}
-    .primary{background:linear-gradient(135deg,var(--accent),#d98561);color:#fff}.secondary{background:#fff;border:1px solid var(--line);color:var(--ink)}.ghost{background:rgba(47,98,83,.08);color:var(--accent2)}.danger{background:rgba(186,65,56,.1);color:var(--bad)}button:hover{transform:translateY(-1px)}
-    button:disabled{opacity:.62;cursor:not-allowed;transform:none}
-    .actions{display:flex;gap:12px;flex-wrap:wrap}
-    .example-list,.meta-list{display:grid;gap:10px}
-    .item,.meta-item{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.68)}
-    .item-main{min-width:0}.item-main b{display:block;word-break:break-all}.item-main small{color:var(--muted);line-height:1.6}
-    .example-metrics{display:flex;gap:8px;flex-wrap:wrap}.metric{padding:4px 8px;border-radius:999px;background:rgba(47,98,83,.08);font-size:12px;color:var(--accent2)}
-    .meta-item strong{font-size:13px}.meta-item span{font-size:13px;color:var(--muted);text-align:right;word-break:break-all}
-    .preview-box{padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.68)}.preview-box pre{margin:0;white-space:pre-wrap;word-break:break-word;line-height:1.7;font-size:13px;color:var(--ink);max-height:220px;overflow:auto}
-    .empty{padding:18px;border:1px dashed var(--line);border-radius:18px;color:var(--muted);text-align:center}
-    .upload-hint,.error-banner,.result-box{padding:12px 14px;border-radius:14px;font-size:13px;line-height:1.7}
-    .upload-hint{border:1px dashed var(--line);background:rgba(255,255,255,.62);color:var(--muted)}
-    .upload-hint.warn{border-color:rgba(201,129,36,.35);background:rgba(201,129,36,.08);color:#8a5a10}
-    .error-banner{display:none;border:1px solid rgba(186,65,56,.28);background:rgba(186,65,56,.08);color:var(--bad)}
-    .result-box{border:1px solid var(--line);background:rgba(255,255,255,.7)}
-    .result-box.success{border-color:rgba(38,123,87,.28);background:rgba(38,123,87,.08)}
-    .result-box.fail{border-color:rgba(186,65,56,.28);background:rgba(186,65,56,.08)}
-    .code{font-family:Consolas,monospace;background:rgba(47,98,83,.08);padding:2px 6px;border-radius:8px}
-    @media (max-width:900px){.grid.two{grid-template-columns:1fr}.hero h1{font-size:32px}.shell{padding:16px}}
+    :root{
+      --bg:#f3ecdf;
+      --panel:#fffaf2;
+      --panel-strong:#fffdf9;
+      --line:rgba(69,56,38,.12);
+      --ink:#1c1b18;
+      --muted:#70685d;
+      --accent:#8f4f35;
+      --teal:#275d57;
+      --ok:#21724e;
+      --warn:#a56a12;
+      --bad:#b23a31;
+      --shadow:0 14px 40px rgba(55,41,22,.10);
+      --radius-xl:28px;
+      --radius-lg:20px;
+      --radius-md:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      color:var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,.72), transparent 28%),
+        linear-gradient(180deg, #f8f1e7 0%, #efe4d4 100%);
+      font:14px/1.6 "Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;
+    }
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .page{max-width:1440px;margin:0 auto;padding:28px;display:grid;gap:22px}
+    .hero{
+      padding:28px 30px;
+      border:1px solid var(--line);
+      border-radius:var(--radius-xl);
+      background:linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,249,240,.94)),var(--panel);
+      box-shadow:var(--shadow);
+      position:relative;
+      overflow:hidden;
+    }
+    .hero::after{
+      content:"";
+      position:absolute;
+      inset:auto 26px 0 auto;
+      width:220px;
+      height:220px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(143,79,53,.10), transparent 72%);
+      pointer-events:none;
+    }
+    .hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+    .hero h1{margin:0;font:600 40px/1.05 Georgia,"Times New Roman",serif;letter-spacing:.02em}
+    .hero p{margin:12px 0 0;max-width:760px;color:var(--muted);font-size:15px}
+    .hero-badge{
+      display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;
+      background:rgba(39,93,87,.08);color:var(--teal);font-weight:700;white-space:nowrap
+    }
+    .hero-dot,.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+    .workspace{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(360px,.85fr);gap:22px;align-items:start}
+    .panel{
+      border:1px solid var(--line);
+      border-radius:var(--radius-xl);
+      background:rgba(255,250,242,.92);
+      box-shadow:var(--shadow);
+      padding:24px;
+      backdrop-filter:blur(16px);
+    }
+    .panel h2{margin:0;font-size:20px}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    .panel-subtitle{color:var(--muted);font-size:13px}
+    .panel-stack{display:grid;gap:18px}
+    .subpanel{
+      border:1px solid rgba(69,56,38,.09);
+      border-radius:var(--radius-lg);
+      background:rgba(255,255,255,.58);
+      padding:18px;
+      display:grid;
+      gap:14px;
+    }
+    .subpanel h3{margin:0;font-size:15px}
+    .grid{display:grid;gap:14px}
+    .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .field{display:grid;gap:8px;min-width:0}
+    .field label{color:var(--muted);font-size:13px;font-weight:700}
+    input,select,textarea{
+      width:100%;border:1px solid var(--line);border-radius:var(--radius-md);
+      background:var(--panel-strong);color:var(--ink);outline:none;
+      transition:border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+    }
+    input,select{height:46px;padding:0 14px}
+    textarea{min-height:168px;padding:12px 14px;resize:vertical}
+    input:focus,select:focus,textarea:focus{
+      border-color:rgba(143,79,53,.45);
+      box-shadow:0 0 0 4px rgba(143,79,53,.10);
+      background:#fff;
+    }
+    .compact-input{height:42px}
+    .hint{color:var(--muted);font-size:12px;line-height:1.6}
+    .info-banner{
+      border:1px solid rgba(39,93,87,.16);
+      background:rgba(39,93,87,.08);
+      color:var(--teal);
+      border-radius:var(--radius-md);
+      padding:12px 14px;
+      font-size:13px;
+      line-height:1.6;
+    }
+    .warn-banner{border-color:rgba(165,106,18,.18);background:rgba(165,106,18,.08);color:var(--warn)}
+    .error-banner{
+      display:none;border:1px solid rgba(178,58,49,.22);background:rgba(178,58,49,.08);color:var(--bad);
+      border-radius:var(--radius-md);padding:12px 14px;font-size:13px;line-height:1.6
+    }
+    .button-row{display:flex;flex-wrap:wrap;gap:12px}
+    button{border:none;border-radius:var(--radius-md);height:44px;padding:0 16px;transition:transform .16s ease, opacity .16s ease}
+    button:hover{transform:translateY(-1px)}
+    button:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .primary{color:#fff;background:linear-gradient(135deg,var(--accent),#b46a49);box-shadow:0 10px 22px rgba(143,79,53,.18)}
+    .secondary{color:var(--ink);background:#fff;border:1px solid var(--line)}
+    .ghost{color:var(--teal);background:rgba(39,93,87,.08)}
+    .danger{color:var(--bad);background:rgba(178,58,49,.08)}
+    .aside{position:sticky;top:22px;display:grid;gap:18px}
+    .stage-pill{
+      display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:999px;
+      background:rgba(39,93,87,.08);color:var(--teal);font-size:13px;font-weight:700
+    }
+    .meta-card,.result-card{display:grid;gap:14px}
+    .result-box{
+      border:1px solid var(--line);border-radius:var(--radius-md);background:rgba(255,255,255,.72);
+      padding:14px;font-size:13px;line-height:1.7;color:var(--muted)
+    }
+    .result-box.success{border-color:rgba(33,114,78,.22);background:rgba(33,114,78,.08);color:var(--ok)}
+    .result-box.fail{border-color:rgba(178,58,49,.24);background:rgba(178,58,49,.08);color:var(--bad)}
+    .code{font-family:Consolas,"SFMono-Regular",monospace;font-size:12px;background:rgba(39,93,87,.08);color:var(--teal);padding:2px 6px;border-radius:8px}
+    .task-summary,.fine-print{color:var(--muted);font-size:13px;line-height:1.7}
+    .fine-print{font-size:12px}
+    @media (max-width:1180px){.workspace{grid-template-columns:1fr}.aside{position:static}}
+    @media (max-width:820px){
+      .page{padding:16px}
+      .hero{padding:22px}
+      .hero h1{font-size:30px}
+      .hero-top{flex-direction:column;align-items:flex-start}
+      .panel{padding:18px}
+      .grid.two{grid-template-columns:1fr}
+      textarea{min-height:140px}
+    }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <section class="card hero">
-      <h1>Offline PPT Master 生成页</h1>
-      <p>上传文档，选择样例风格，等待生成后直接下载最终 PPT。</p>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>智文通——PPT生成 测试页</h1>
+          <p>上传源文档，或直接粘贴文字内容，系统将按模板骨架和参数配置生成 PPT。适合内网测试、联调和批量接入前的人工验证。</p>
+        </div>
+        <div class="hero-badge"><span class="hero-dot"></span><span>同源模式</span></div>
+      </div>
     </section>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>服务配置</h2>
-        <span class="status"><span class="dot"></span><span id="apiLabel">未连接</span></span>
-      </div>
-      <div class="grid two">
-        <div class="field">
-          <label for="baseUrl">API Base URL</label>
-          <input id="baseUrl" placeholder="例如 http://127.0.0.1:8000">
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <div class="actions">
-            <button class="primary" id="saveBaseUrlBtn">保存地址</button>
-            <button class="secondary" id="refreshExamplesBtn">刷新样例</button>
+    <section class="workspace">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>创建任务</h2>
+            <div class="panel-subtitle">左侧负责输入与参数设置，右侧用于查看状态和下载结果。</div>
           </div>
+          <button class="ghost" id="clearFormBtn">重置表单</button>
         </div>
-      </div>
-      <p class="hint">页面会把地址缓存到浏览器本地。</p>
-    </section>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>创建任务</h2>
-        <button class="ghost" id="clearFormBtn">重置表单</button>
-      </div>
-      <div class="grid two">
-        <div class="field">
-          <label for="projectName">项目名</label>
-          <input id="projectName" placeholder="可留空，后端自动生成">
-        </div>
-        <div class="field">
-          <label for="canvasFormat">画布格式</label>
-          <select id="canvasFormat">
-            <option value="ppt169">ppt169</option>
-            <option value="ppt43">ppt43</option>
-          </select>
-        </div>
-      </div>
-      <div class="grid two">
-        <div class="field">
-          <label for="exampleReference">样例风格参考</label>
-          <select id="exampleReference"><option value="">不使用样例参考</option></select>
-          <div id="exampleHint" class="tiny"></div>
-        </div>
-        <div class="field">
-          <label for="templateName">模板名</label>
-          <select id="templateName"><option value="">自动选择或无模板</option></select>
-          <div id="templateHint" class="tiny"></div>
-        </div>
-      </div>
-      <div id="modeHint" class="upload-hint warn" style="margin-top:12px">当前未选择样例风格参考，将按自动风格生成，不会套用任何样例。</div>
-      <div class="grid two">
-        <div class="field">
-          <label for="preferStyle">风格偏好</label>
-          <select id="preferStyle">
-            <option value="auto">auto</option>
-            <option value="general">general</option>
-            <option value="consulting">consulting</option>
-            <option value="consulting_top">consulting_top</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="audience">受众</label>
-          <input id="audience" placeholder="可选">
-        </div>
-      </div>
-      <div class="grid two">
-        <div class="field">
-          <label for="useCase">用途</label>
-          <input id="useCase" placeholder="可选">
-        </div>
-        <div class="field">
-          <label for="sourceUploads">上传源文档</label>
-          <input id="sourceUploads" type="file" multiple>
-        </div>
-      </div>
-      <div class="field">
-        <label for="sourceText">或直接粘贴文字内容</label>
-        <textarea id="sourceText" placeholder="可直接粘贴 Markdown、汇报提纲、Word 文本或纯文本；当没有上传源文档时，系统会直接使用这里的文字生成 PPT。"></textarea>
-      </div>
-      <div class="field">
-        <label for="coreMessage">核心信息</label>
-        <textarea id="coreMessage" placeholder="可选，用于强调汇报目标或结论"></textarea>
-      </div>
-      <div class="field">
-        <label for="imageUploads">上传图片</label>
-        <input id="imageUploads" type="file" multiple accept="image/*">
-      </div>
-      <div id="uploadHint" class="upload-hint warn">你当前没有上传任何真实文件。请先选择至少一个源文档；如果文件大小为 0 B，也会被视为无效上传。</div>
-      <div id="errorBanner" class="error-banner"></div>
-      <div class="actions" style="margin-top:14px">
-        <button class="primary" id="createTaskBtn">开始生成</button>
-        <button class="secondary" id="pollingBtn">开启轮询</button>
-      </div>
-      <div id="submitHint" class="tiny" style="margin-top:10px"></div>
-      <p class="tiny" style="margin-top:10px">页面默认隐藏高级参数，内部仍按 `notes_style=formal` 和 `output_formats=[native_pptx, svg_pptx]` 提交。</p>
-    </section>
+        <div class="panel-stack">
+          <section class="subpanel">
+            <h3>参数配置</h3>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>样例风格</h2>
-        <span class="tiny">选择“作为参考”即可写入表单</span>
-      </div>
-      <div id="examplesList" class="example-list"><div class="empty">尚未加载</div></div>
-      <div style="height:12px"></div>
-      <div id="exampleDetailMeta" class="meta-list"><div class="empty">点击“查看详情”后展示</div></div>
-      <div style="height:12px"></div>
-      <div class="preview-box"><pre id="exampleDetailPreview">暂无样例摘要</pre></div>
-    </section>
+            <div class="grid two">
+              <div class="field">
+                <label for="projectName">项目名</label>
+                <input id="projectName" class="compact-input" placeholder="可留空，后端自动生成">
+              </div>
+              <div class="field">
+                <label for="canvasFormat">画布格式</label>
+                <select id="canvasFormat">
+                  <option value="ppt169">ppt169</option>
+                  <option value="ppt43">ppt43</option>
+                </select>
+              </div>
+            </div>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>任务状态</h2>
-        <div class="actions">
-          <button class="secondary" id="refreshTaskBtn">刷新状态</button>
-          <button class="danger" id="cancelTaskBtn">取消任务</button>
-        </div>
-      </div>
-      <div class="grid two">
-        <div class="field">
-          <label for="taskIdInput">Task ID</label>
-          <input id="taskIdInput" placeholder="创建任务后自动填充">
-        </div>
-        <div class="field">
-          <label>当前状态</label>
-          <div id="taskMeta" class="status"><span class="dot"></span><span>未开始</span></div>
-        </div>
-      </div>
-      <div id="taskSummary" class="hint" style="margin-top:12px">暂无任务。</div>
-    </section>
+            <div class="grid two">
+              <div class="field">
+                <label for="templateName">模板名</label>
+                <select id="templateName"><option value="">自动选择或不指定</option></select>
+                <div id="templateHint" class="hint"></div>
+              </div>
+              <div class="field">
+                <label for="exampleReference">样例选择</label>
+                <select id="exampleReference"><option value="">不指定样例</option></select>
+                <div id="exampleHint" class="hint"></div>
+              </div>
+            </div>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>下载结果</h2>
-        <span class="tiny">默认只展示最终 PPT 文件</span>
+            <div class="grid two">
+              <div class="field">
+                <label for="preferStyle">风格偏好</label>
+                <select id="preferStyle">
+                  <option value="auto">auto</option>
+                  <option value="general">general</option>
+                  <option value="consulting">consulting</option>
+                  <option value="consulting_top">consulting_top</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="coreMessage">核心信息</label>
+                <input id="coreMessage" class="compact-input" placeholder="可选，用于强调汇报目标、结论或关键动作">
+              </div>
+            </div>
+
+            <div class="grid two">
+              <div class="field">
+                <label for="audience">受众</label>
+                <input id="audience" class="compact-input" placeholder="如：领导、客户、业务团队">
+              </div>
+              <div class="field">
+                <label for="useCase">用途</label>
+                <input id="useCase" class="compact-input" placeholder="如：汇报、评审、方案讲解">
+              </div>
+            </div>
+
+            <div id="modeHint" class="info-banner warn-banner">当前未指定模板或样例，系统将按文档内容自动选择合适的模板和风格。</div>
+          </section>
+
+          <section class="subpanel">
+            <h3>内容输入</h3>
+
+            <div class="field">
+              <label for="sourceUploads">上传源文档</label>
+              <input id="sourceUploads" type="file" multiple>
+              <div class="hint">支持上传文档作为主输入；如未上传，将直接使用下方文字内容生成 PPT。</div>
+            </div>
+
+            <div class="field">
+              <label for="sourceText">直接粘贴文字内容</label>
+              <textarea id="sourceText" placeholder="可直接粘贴 Markdown、汇报提纲、Word 文本或纯文本。没有上传源文档时，系统会按这里的文字直接生成 PPT。"></textarea>
+            </div>
+
+            <div class="field">
+              <label for="imageUploads">上传图片</label>
+              <input id="imageUploads" type="file" multiple accept="image/*">
+              <div class="hint">图片将作为补充素材传入任务，不会替代正文内容。</div>
+            </div>
+
+            <div id="uploadHint" class="info-banner warn-banner">请至少提供一种源内容：上传源文档，或直接粘贴文字内容。</div>
+            <div id="errorBanner" class="error-banner"></div>
+
+            <div class="button-row">
+              <button class="primary" id="createTaskBtn">开始生成</button>
+              <button class="secondary" id="pollingBtn">开启轮询</button>
+            </div>
+
+            <div id="submitHint" class="fine-print"></div>
+            <div class="fine-print">页面默认使用 <span class="code">notes_style=formal</span> 与 <span class="code">output_formats=[native_pptx, svg_pptx]</span> 提交任务。</div>
+          </section>
+        </div>
       </div>
-      <div id="resultBox" class="result-box">任务完成后，这里会显示最终 `native_pptx` 下载按钮。</div>
-      <div class="actions" style="margin-top:14px">
-        <button class="primary" id="downloadPptBtn" style="display:none">下载最终 PPT</button>
-      </div>
+
+      <aside class="aside">
+        <section class="panel meta-card">
+          <div class="panel-head">
+            <div>
+              <h2>任务状态</h2>
+              <div class="panel-subtitle">查看当前 Task ID、阶段进度与任务摘要。</div>
+            </div>
+            <div class="button-row">
+              <button class="secondary" id="refreshTaskBtn">刷新状态</button>
+              <button class="danger" id="cancelTaskBtn">取消任务</button>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="field">
+              <label for="taskIdInput">Task ID</label>
+              <input id="taskIdInput" class="compact-input" placeholder="创建任务后自动填入，也可手动粘贴">
+            </div>
+            <div class="field">
+              <label>当前阶段</label>
+              <div id="taskMeta" class="stage-pill"><span class="dot"></span><span>未开始</span></div>
+            </div>
+          </div>
+
+          <div id="taskSummary" class="task-summary">暂无任务。</div>
+        </section>
+
+        <section class="panel result-card">
+          <div class="panel-head">
+            <div>
+              <h2>下载结果</h2>
+              <div class="panel-subtitle">默认展示最终的 <span class="code">native_pptx</span> 下载入口。</div>
+            </div>
+          </div>
+
+          <div id="resultBox" class="result-box">任务完成后，这里会显示最终 PPT 的下载按钮。</div>
+          <div class="button-row">
+            <button class="primary" id="downloadPptBtn" style="display:none">下载最终 PPT</button>
+          </div>
+        </section>
+      </aside>
     </section>
   </div>
 
   <script>
-    const defaultBaseUrl=(location.protocol==="http:"||location.protocol==="https:")?location.origin:"http://127.0.0.1:8000";
-    const state={baseUrl:localStorage.getItem("ppt_api_base_url")||defaultBaseUrl,taskId:"",timer:null,nativeArtifactName:"",isSubmitting:false};
-    const $=id=>document.getElementById(id);
-    const els={baseUrl:$("baseUrl"),apiLabel:$("apiLabel"),templateName:$("templateName"),templateHint:$("templateHint"),exampleReference:$("exampleReference"),exampleHint:$("exampleHint"),modeHint:$("modeHint"),sourceUploads:$("sourceUploads"),sourceText:$("sourceText"),imageUploads:$("imageUploads"),uploadHint:$("uploadHint"),submitHint:$("submitHint"),errorBanner:$("errorBanner"),examplesList:$("examplesList"),exampleDetailMeta:$("exampleDetailMeta"),exampleDetailPreview:$("exampleDetailPreview"),taskIdInput:$("taskIdInput"),taskMeta:$("taskMeta"),taskSummary:$("taskSummary"),pollingBtn:$("pollingBtn"),resultBox:$("resultBox"),downloadPptBtn:$("downloadPptBtn"),createTaskBtn:$("createTaskBtn")};
+    const state = {
+      taskId: "",
+      timer: null,
+      nativeArtifactName: "",
+      isSubmitting: false,
+      examples: [],
+      templates: []
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      projectName: $("projectName"),
+      canvasFormat: $("canvasFormat"),
+      templateName: $("templateName"),
+      exampleReference: $("exampleReference"),
+      preferStyle: $("preferStyle"),
+      audience: $("audience"),
+      useCase: $("useCase"),
+      coreMessage: $("coreMessage"),
+      sourceUploads: $("sourceUploads"),
+      sourceText: $("sourceText"),
+      imageUploads: $("imageUploads"),
+      templateHint: $("templateHint"),
+      exampleHint: $("exampleHint"),
+      modeHint: $("modeHint"),
+      uploadHint: $("uploadHint"),
+      submitHint: $("submitHint"),
+      errorBanner: $("errorBanner"),
+      taskIdInput: $("taskIdInput"),
+      taskMeta: $("taskMeta"),
+      taskSummary: $("taskSummary"),
+      resultBox: $("resultBox"),
+      downloadPptBtn: $("downloadPptBtn"),
+      createTaskBtn: $("createTaskBtn"),
+      pollingBtn: $("pollingBtn")
+    };
+
     init();
-    queueMicrotask(refreshSourceHint);
 
-    function localizeStaticCopy(){
-      document.title="Offline PPT Master 生成页";
-      const hero=document.querySelector(".hero");
-      if(hero){
-        const h1=hero.querySelector("h1");
-        const p=hero.querySelector("p");
-        if(h1)h1.textContent="Offline PPT Master 生成页";
-        if(p)p.textContent="上传文档或直接粘贴文字，选择样例或模板，等待生成后直接下载最终 PPT。";
-      }
-      const labels={
-        saveBaseUrlBtn:"保存地址",
-        refreshExamplesBtn:"刷新样例",
-        clearFormBtn:"重置表单",
-        createTaskBtn:"开始生成",
-        pollingBtn:"开启轮询",
-        refreshTaskBtn:"刷新状态",
-        cancelTaskBtn:"取消任务",
-        downloadPptBtn:"下载最终 PPT",
-      };
-      Object.entries(labels).forEach(([id,value])=>{const el=$(id); if(el) el.textContent=value;});
-      const placeholders={
-        baseUrl:"例如 http://127.0.0.1:8000",
-        projectName:"可留空，后端自动生成",
-        audience:"可选",
-        useCase:"可选",
-        taskIdInput:"创建任务后自动填入",
-        coreMessage:"可选，用于强调汇报目标或结论",
-      };
-      Object.entries(placeholders).forEach(([id,value])=>{const el=$(id); if(el) el.placeholder=value;});
-      const fieldLabels=[...document.querySelectorAll('.field label')];
-      const fieldText={
-        baseUrl:"API Base URL",
-        projectName:"项目名",
-        canvasFormat:"画布格式",
-        exampleReference:"样例风格参考",
-        templateName:"模板名",
-        preferStyle:"风格偏好",
-        audience:"受众",
-        useCase:"用途",
-        sourceUploads:"上传源文档",
-        sourceText:"或直接粘贴文字内容",
-        coreMessage:"核心信息",
-        imageUploads:"上传图片",
-        taskIdInput:"Task ID",
-      };
-      fieldLabels.forEach(label=>{
-        const target=label.getAttribute('for');
-        if(target && fieldText[target]) label.textContent=fieldText[target];
+    async function init() {
+      bind();
+      await Promise.all([loadTemplates(), loadExamples()]).catch((err) => showError(`初始化失败：${err.message}`));
+      refreshModeHint();
+      refreshSourceHint();
+    }
+
+    function bind() {
+      $("clearFormBtn").addEventListener("click", resetForm);
+      $("refreshTaskBtn").addEventListener("click", () => refreshTask().catch((err) => showError(err.message || String(err))));
+      $("cancelTaskBtn").addEventListener("click", () => cancelTask().catch((err) => showError(err.message || String(err))));
+      $("pollingBtn").addEventListener("click", () => togglePolling().catch((err) => showError(err.message || String(err))));
+      els.createTaskBtn.addEventListener("click", () => submitTask().catch((err) => showError(err.message || String(err))));
+      els.downloadPptBtn.addEventListener("click", downloadNativePpt);
+      els.taskIdInput.addEventListener("change", () => {
+        state.taskId = els.taskIdInput.value.trim();
       });
-      const headings=[...document.querySelectorAll('.section-head h2')];
-      if(headings[0]) headings[0].textContent='服务配置';
-      if(headings[1]) headings[1].textContent='创建任务';
-      if(headings[2]) headings[2].textContent='样例风格';
-      if(headings[3]) headings[3].textContent='任务状态';
-      if(headings[4]) headings[4].textContent='下载结果';
-      const tiny=[...document.querySelectorAll('.tiny')];
-      if(tiny[0]) tiny[0].textContent='页面会把地址缓存到浏览器本地。';
-      if(tiny[3]) tiny[3].textContent='选择“作为参考”即可写入表单';
-      if(tiny[4]) tiny[4].textContent='默认只展示最终 PPT 文件';
-      if(els.apiLabel && !els.apiLabel.textContent.trim()) els.apiLabel.textContent='未连接';
-      if(els.exampleDetailPreview && !els.exampleDetailPreview.dataset.localized){
-        els.exampleDetailPreview.textContent='暂无样例摘要';
-        els.exampleDetailPreview.dataset.localized='1';
-      }
-      if(els.taskSummary && els.taskSummary.textContent.includes('?')) els.taskSummary.textContent='暂无任务。';
-      if(els.resultBox && els.resultBox.textContent.includes('?')) els.resultBox.textContent='任务完成后，这里会显示最终 `native_pptx` 下载按钮。';
-      if(els.modeHint) els.modeHint.textContent='当前未选择样例风格参考，将按自动风格生成，不会套用任何样例。';
+      els.sourceUploads.addEventListener("change", refreshSourceHint);
+      els.sourceText.addEventListener("input", refreshSourceHint);
+      els.imageUploads.addEventListener("change", refreshSourceHint);
+      els.templateName.addEventListener("change", refreshModeHint);
+      els.exampleReference.addEventListener("change", refreshModeHint);
     }
 
-    function init(){localizeStaticCopy();els.baseUrl.value=state.baseUrl;bind();updateApiLabel();refreshBootstrap().catch(err=>showError(`初始化失败：${err.message}`));syncExampleTemplateState();refreshSourceHint()}
-    function bind(){
-      $("saveBaseUrlBtn").addEventListener("click",()=>{state.baseUrl=normalizeBaseUrl(els.baseUrl.value);els.baseUrl.value=state.baseUrl;localStorage.setItem("ppt_api_base_url",state.baseUrl);updateApiLabel()});
-      $("refreshExamplesBtn").addEventListener("click",()=>refreshBootstrap());
-      els.createTaskBtn.addEventListener("click",()=>submitTask().catch(err=>showError(err.message||String(err))));
-      $("refreshTaskBtn").addEventListener("click",()=>refreshTask().catch(err=>showError(err.message||String(err))));
-      $("cancelTaskBtn").addEventListener("click",()=>cancelTask().catch(err=>showError(err.message||String(err))));
-      $("pollingBtn").addEventListener("click",()=>togglePolling().catch(err=>showError(err.message||String(err))));
-      $("clearFormBtn").addEventListener("click",()=>resetForm());
-      els.taskIdInput.addEventListener("change",()=>state.taskId=els.taskIdInput.value.trim());
-      els.sourceUploads.addEventListener("change",refreshSourceHint);
-      els.sourceText.addEventListener("input",refreshSourceHint);
-      els.imageUploads.addEventListener("change",refreshSourceHint);
-      els.exampleReference.addEventListener("change",syncExampleTemplateState);
-      els.templateName.addEventListener("change",syncExampleTemplateState);
-      els.downloadPptBtn.addEventListener("click",()=>downloadNativePpt());
-    }
-
-    async function refreshBootstrap(){await Promise.all([loadTemplates(),loadExamples()])}
-    function normalizeBaseUrl(v){v=(v||"").trim();if(!v)return"";return(/^https?:\/\//i.test(v)?v:`http://${v}`).replace(/\/$/,"")}
-    function updateApiLabel(){els.apiLabel.textContent=normalizeBaseUrl(els.baseUrl.value)||"未配置"}
-    async function apiFetch(path,options={}){
-      const timeoutMs=options.timeoutMs||30000;
-      const controller=new AbortController();
-      const timer=setTimeout(()=>controller.abort(`timeout:${timeoutMs}`),timeoutMs);
-      try{
-        const res=await fetch(`${normalizeBaseUrl(els.baseUrl.value)}${path}`,{...options,signal:controller.signal});
-        if(!res.ok){
-          let msg=`HTTP ${res.status}`;
-          try{const data=await res.json();msg=data.detail||data.message||JSON.stringify(data)}catch{}
-          showError(msg);
-          throw new Error(msg);
+    async function apiFetch(path, options = {}) {
+      const timeoutMs = options.timeoutMs || 30000;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(`timeout:${timeoutMs}`), timeoutMs);
+      try {
+        const response = await fetch(path, { ...options, signal: controller.signal });
+        if (!response.ok) {
+          let message = `HTTP ${response.status}`;
+          try {
+            const data = await response.json();
+            message = data.detail || data.message || JSON.stringify(data);
+          } catch {}
+          showError(message);
+          throw new Error(message);
         }
-        const type=res.headers.get("content-type")||"";
-        return type.includes("application/json")?res.json():res.blob();
-      }catch(err){
-        if(err?.name==="AbortError"||String(err).startsWith("timeout:")){
-          const msg=`?????${path} ? ${Math.round(timeoutMs/1000)} ???????????????????`;
-          showError(msg);
-          throw new Error(msg);
+        const contentType = response.headers.get("content-type") || "";
+        return contentType.includes("application/json") ? response.json() : response.blob();
+      } catch (err) {
+        if (err?.name === "AbortError" || String(err).startsWith("timeout:")) {
+          const message = `请求 ${path} 在 ${Math.round(timeoutMs / 1000)} 秒内未返回，请检查后端服务状态。`;
+          showError(message);
+          throw new Error(message);
         }
         throw err;
-      }finally{
+      } finally {
         clearTimeout(timer);
       }
     }
 
-    async function loadTemplates(){const data=await apiFetch("/api/v1/templates");populateSelect(els.templateName,data.templates||[],"自动选择或无模板");syncExampleTemplateState()}
-    async function loadExamples(){
-      const data=await apiFetch("/api/v1/examples");
-      const items=data.examples||[];
-      populateSelect(els.exampleReference,items,"不使用样例参考");
-      syncExampleTemplateState();
-      if(!items.length){els.examplesList.innerHTML='<div class="empty">暂无样例</div>';return}
-      els.examplesList.innerHTML=items.map(item=>`<div class="item"><div class="item-main"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><b>${escapeHtml(item.name)}</b><div class="example-metrics"><span class="metric">${escapeHtml(item.style_tag||item.suggested_style||"-")}</span>${item.recommended_template?`<span class="metric">${escapeHtml(item.recommended_template)}</span>`:""}</div></div><small>${escapeHtml(item.summary||"无摘要")}</small></div><div class="actions"><button class="ghost" data-ref="${escapeHtml(item.name)}">作为参考</button><button class="secondary" data-detail="${escapeHtml(item.name)}">查看详情</button></div></div>`).join("");
-      els.examplesList.querySelectorAll("button[data-ref]").forEach(btn=>btn.addEventListener("click",()=>useExampleReference(btn.dataset.ref)));
-      els.examplesList.querySelectorAll("button[data-detail]").forEach(btn=>btn.addEventListener("click",()=>showExampleDetail(btn.dataset.detail)));
+    async function loadTemplates() {
+      const data = await apiFetch("/api/v1/templates");
+      state.templates = Array.isArray(data.templates) ? data.templates : [];
+      populateSelect(els.templateName, state.templates, "自动选择或不指定", (item) => item.name || item);
+      refreshModeHint();
     }
 
-    function populateSelect(selectEl,items,emptyLabel){
-      const current=selectEl.value;
-      const options=[`<option value="">${escapeHtml(emptyLabel)}</option>`].concat(items.map(item=>{const value=typeof item==="string"?item:(item.name||"");return `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`}));
-      selectEl.innerHTML=options.join("");
-      if(current&&items.some(item=>(typeof item==="string"?item:item.name)===current))selectEl.value=current;
+    async function loadExamples() {
+      const data = await apiFetch("/api/v1/examples");
+      state.examples = Array.isArray(data.examples) ? data.examples : [];
+      populateSelect(els.exampleReference, state.examples, "不指定样例", (item) => item.title || item.name || item);
+      refreshModeHint();
     }
 
-    function useExampleReference(name){els.exampleReference.value=name;syncExampleTemplateState()}
-    function syncExampleTemplateState(){
-      const hasExample=!!nullable(els.exampleReference.value);
-      const selectedTemplate=nullable(els.templateName.value);
-      if(hasExample){
-        els.templateName.disabled=false;
-        els.templateHint.textContent=selectedTemplate?"已同时选择模板和样例，系统将优先按模板生成。":"已选择样例风格参考，未选模板时会按样例强参考生成。";
-        els.exampleHint.textContent=selectedTemplate?"样例仅作为辅助风格参考，不会覆盖模板。":"当前默认使用 example_strong 强参考模式。";
-        els.modeHint.className="upload-hint";
-        els.modeHint.textContent=selectedTemplate
-          ?`当前按模板生成：${selectedTemplate}；样例参考：${els.exampleReference.value} 仅作辅助，不会覆盖模板。`
-          :`当前将按样例强参考生成：${els.exampleReference.value}。不会使用通用自动风格。`;
-      }else{
-        els.templateName.disabled=false;
-        els.templateHint.textContent="";
-        els.exampleHint.textContent="";
-        if(selectedTemplate){
-          els.modeHint.className="upload-hint";
-          els.modeHint.textContent=`当前将按模板生成：${selectedTemplate}。未选择样例时，不会套用任何样例。`;
-        }else{
-          els.modeHint.className="upload-hint warn";
-          els.modeHint.textContent="当前未选择样例风格参考，将按自动风格生成，不会套用任何样例。";
-        }
+    function populateSelect(selectEl, items, emptyLabel, labelGetter) {
+      const current = selectEl.value;
+      const options = [`<option value="">${escapeHtml(emptyLabel)}</option>`].concat(
+        items.map((item) => {
+          const value = typeof item === "string" ? item : (item.name || "");
+          const label = typeof item === "string" ? item : labelGetter(item);
+          return `<option value="${escapeHtml(value)}">${escapeHtml(label || value)}</option>`;
+        })
+      );
+      selectEl.innerHTML = options.join("");
+      if (current && items.some((item) => (typeof item === "string" ? item : item.name) === current)) {
+        selectEl.value = current;
       }
     }
 
-    async function showExampleDetail(name){
-      const data=await apiFetch(`/api/v1/examples/${encodeURIComponent(name)}`);
-      const example=data.example||{};
-      const profile=data.style_profile||{};
-      els.exampleDetailMeta.innerHTML=[
-        metaRow("????",example.name||"-"),
-        metaRow("????",profile.style_tag||example.style_tag||"-"),
-        metaRow("????",profile.recommended_template||example.recommended_template||"-"),
-        metaRow("????",profile.style_source||example.style_source||"-"),
-        metaRow("?????",formatConfidence(profile.style_confidence??example.style_confidence)),
-      ].join("");
-      const excerpt=(data.preview&&data.preview.design_spec_excerpt)||"?? design_spec ??";
-      const reason=profile.style_reason?`
+    function refreshModeHint() {
+      const selectedTemplate = nullable(els.templateName.value);
+      const selectedExample = nullable(els.exampleReference.value);
+      const exampleMeta = state.examples.find((item) => item.name === selectedExample) || null;
 
-[????]
-${profile.style_reason}`:"";
-      els.exampleDetailPreview.textContent=`${excerpt}${reason}`;
+      els.templateHint.textContent = selectedTemplate ? "已显式选择模板，生成时将优先按模板骨架组织页面。" : "";
+      if (exampleMeta) {
+        const templateText = exampleMeta.recommended_template ? `推荐模板：${exampleMeta.recommended_template}` : "未提供推荐模板";
+        const styleText = exampleMeta.style_tag ? `风格：${exampleMeta.style_tag}` : "";
+        els.exampleHint.textContent = [styleText, templateText].filter(Boolean).join(" · ");
+      } else {
+        els.exampleHint.textContent = "";
+      }
+
+      if (selectedTemplate && selectedExample) {
+        els.modeHint.className = "info-banner";
+        els.modeHint.textContent = `当前同时选择了模板和样例。系统将优先按模板 ${selectedTemplate} 生成；样例 ${selectedExample} 仅作为辅助风格参考。`;
+      } else if (selectedTemplate) {
+        els.modeHint.className = "info-banner";
+        els.modeHint.textContent = `当前按模板生成：${selectedTemplate}。页面骨架将优先继承该模板。`;
+      } else if (selectedExample) {
+        els.modeHint.className = "info-banner";
+        els.modeHint.textContent = `当前按样例强参考生成：${selectedExample}。系统会优先采用该样例对应的风格方向和推荐模板。`;
+      } else {
+        els.modeHint.className = "info-banner warn-banner";
+        els.modeHint.textContent = "当前未指定模板或样例，系统将按文档内容自动选择合适的模板和风格。";
+      }
     }
 
-    function refreshSourceHint(){
-      const sourceFiles=[...els.sourceUploads.files].filter(file=>file&&file.size>0);
-      const invalidSourceFiles=[...els.sourceUploads.files].filter(file=>!file||file.size<=0);
-      const sourceText=(els.sourceText.value||"").trim();
-      const imageFiles=[...els.imageUploads.files].filter(file=>file&&file.size>0);
-      const sourceParts=[];
-      if(!sourceFiles.length&&!sourceText){
-        els.uploadHint.className="upload-hint warn";
-        const invalidText=invalidSourceFiles.length?` 当前还有 ${invalidSourceFiles.length} 个 0 B 源文件会被忽略。`:"";
-        els.uploadHint.textContent=`请至少提供一种源内容：上传源文档，或直接粘贴文字内容。${invalidText}`;
-        if(!state.isSubmitting)els.submitHint.textContent="";
+    function refreshSourceHint() {
+      const sourceFiles = [...els.sourceUploads.files].filter((file) => file && file.size > 0);
+      const invalidSourceFiles = [...els.sourceUploads.files].filter((file) => !file || file.size <= 0);
+      const sourceText = (els.sourceText.value || "").trim();
+      const imageFiles = [...els.imageUploads.files].filter((file) => file && file.size > 0);
+
+      if (!sourceFiles.length && !sourceText) {
+        els.uploadHint.className = "info-banner warn-banner";
+        const invalidText = invalidSourceFiles.length ? ` 当前还有 ${invalidSourceFiles.length} 个 0 B 源文件会被忽略。` : "";
+        els.uploadHint.textContent = `请至少提供一种源内容：上传源文档，或直接粘贴文字内容。${invalidText}`;
+        if (!state.isSubmitting) {
+          els.submitHint.textContent = "";
+        }
         return;
       }
-      els.uploadHint.className="upload-hint";
-      if(sourceFiles.length){
-        sourceParts.push(`源文档 ${sourceFiles.length} 个：${sourceFiles.map(file=>`${file.name} (${formatBytes(file.size)})`).join("；")}`);
+
+      const parts = [];
+      if (sourceFiles.length) {
+        parts.push(`源文档 ${sourceFiles.length} 个：${sourceFiles.map((file) => `${file.name} (${formatBytes(file.size)})`).join("；")}`);
       }
-      if(sourceText){
-        sourceParts.push(`直接粘贴文本：${sourceText.length} 字`);
+      if (sourceText) {
+        parts.push(`粘贴文本 ${sourceText.length} 字`);
       }
-      if(imageFiles.length){
-        sourceParts.push(`图片 ${imageFiles.length} 个：${imageFiles.map(file=>`${file.name} (${formatBytes(file.size)})`).join("；")}`);
+      if (imageFiles.length) {
+        parts.push(`图片 ${imageFiles.length} 个：${imageFiles.map((file) => `${file.name} (${formatBytes(file.size)})`).join("；")}`);
       }
-      els.uploadHint.textContent=sourceParts.join("；");
-      const sourceMode=sourceFiles.length?"upload":"inline";
-      const modeText=sourceMode==="upload"?"上传文档":"直接粘贴文字";
-      els.submitHint.textContent=`本次将按“${modeText}”创建任务${imageFiles.length?`，并附带图片 ${imageFiles.length} 个`:""}。点击“开始生成”后，接口应立即返回 task_id。`;
+      els.uploadHint.className = "info-banner";
+      els.uploadHint.textContent = parts.join(" · ");
+
+      const sourceMode = sourceFiles.length ? "upload" : "inline";
+      const modeText = sourceMode === "upload" ? "上传文档" : "直接粘贴文字";
+      els.submitHint.textContent = `本次将按“${modeText}”创建任务${imageFiles.length ? `，并附带图片 ${imageFiles.length} 个` : ""}。`;
     }
 
-    async function submitTask(){
-      if(state.isSubmitting)return;
+    async function submitTask() {
+      if (state.isSubmitting) {
+        return;
+      }
       clearError();
-      const projectName=$("projectName").value.trim();
-      const exampleReference=nullable($("exampleReference").value);
-      const sourceFiles=[...els.sourceUploads.files].filter(file=>file&&file.size>0);
-      const sourceText=(els.sourceText.value||"").trim();
-      const imageFiles=[...els.imageUploads.files].filter(file=>file&&file.size>0);
-      if(!sourceFiles.length&&!sourceText){
+
+      const sourceFiles = [...els.sourceUploads.files].filter((file) => file && file.size > 0);
+      const sourceText = (els.sourceText.value || "").trim();
+      const imageFiles = [...els.imageUploads.files].filter((file) => file && file.size > 0);
+
+      if (!sourceFiles.length && !sourceText) {
         refreshSourceHint();
         return fail("请先上传源文档，或直接粘贴文字内容。");
       }
-      const sourceMode=sourceFiles.length?"upload":"inline";
-      const submitMessage=sourceMode==="upload"
-        ?`正在提交任务：源文档 ${sourceFiles.length} 个${imageFiles.length?`，图片 ${imageFiles.length} 个`:""}。`
-        :`正在提交任务：直接粘贴文本 ${sourceText.length} 字${imageFiles.length?`，图片 ${imageFiles.length} 个`:""}。`;
-      setSubmitting(true,submitMessage);
 
-      const payload={
-        source_mode:sourceMode,
-        project_name:projectName,
-        canvas_format:$("canvasFormat").value,
-        template_name:nullable($("templateName").value),
-        example_reference:exampleReference,
-        style_source:exampleReference?"example_strong":"prompt_reference",
-        audience:nullable($("audience").value),
-        use_case:nullable($("useCase").value),
-        core_message:nullable($("coreMessage").value),
-        prefer_style:$("preferStyle").value,
-        notes_style:"formal",
-        output_formats:["native_pptx","svg_pptx"],
-        source_text:sourceMode==="inline"?sourceText:null
-      };
+      state.isSubmitting = true;
+      els.createTaskBtn.disabled = true;
+      els.createTaskBtn.textContent = "提交中...";
 
-      const fd=new FormData();
-      Object.entries(payload).forEach(([k,v])=>{if(v!==null&&v!==undefined)fd.append(k,Array.isArray(v)?JSON.stringify(v):v)});
-      if(sourceMode==="upload")sourceFiles.forEach(file=>fd.append("source_files",file));
-      imageFiles.forEach(file=>fd.append("image_files",file));
-      renderResultPending("任务提交中，正在等待服务端返回 task_id。");
-      els.taskSummary.innerHTML=`当前阶段：<span class="code">正在提交请求</span><br>如果这里长时间没有变化，请查看后端窗口或浏览器控制台。`;
-      try{
-        const data=await apiFetch("/api/v1/tasks",{method:"POST",body:fd,timeoutMs:20000});
-        state.taskId=data.task_id||"";
-        state.nativeArtifactName="";
-        els.taskIdInput.value=state.taskId;
-        els.submitHint.textContent=`任务已受理，task_id=${state.taskId}；输入方式=${sourceMode==="upload"?"upload":"inline"}；样例参考=${exampleReference||"无"}；模板=${payload.template_name||"无"}；风格偏好=${payload.prefer_style}`;
-        renderResultPending("任务已创建，正在生成 PPT。");
-        await refreshTask();
+      try {
+        const formData = new FormData();
+        const sourceMode = sourceFiles.length ? "upload" : "inline";
+
+        formData.append("source_mode", sourceMode);
+        formData.append("project_name", els.projectName.value.trim());
+        formData.append("canvas_format", els.canvasFormat.value);
+        if (nullable(els.templateName.value)) {
+          formData.append("template_name", els.templateName.value.trim());
+        }
+        if (nullable(els.exampleReference.value)) {
+          formData.append("example_reference", els.exampleReference.value.trim());
+        }
+        formData.append("style_source", nullable(els.exampleReference.value) ? "example_strong" : "prompt_reference");
+        formData.append("prefer_style", els.preferStyle.value);
+        formData.append("audience", els.audience.value.trim());
+        formData.append("use_case", els.useCase.value.trim());
+        formData.append("core_message", els.coreMessage.value.trim());
+        formData.append("notes_style", "formal");
+        formData.append("output_formats", JSON.stringify(["native_pptx", "svg_pptx"]));
+
+        if (sourceMode === "upload") {
+          sourceFiles.forEach((file) => formData.append("source_files", file, file.name));
+        } else {
+          formData.append("source_text", sourceText);
+        }
+        imageFiles.forEach((file) => formData.append("image_files", file, file.name));
+
+        const response = await apiFetch("/api/v1/tasks", {
+          method: "POST",
+          body: formData,
+          timeoutMs: 120000
+        });
+
+        state.taskId = response.task_id;
+        els.taskIdInput.value = state.taskId;
+        setTaskMeta(response.status, response.stage);
+        els.taskSummary.textContent = `任务已创建，Task ID：${state.taskId}。`;
+        setResultBox("任务已创建，等待生成结果。", "default");
         startPolling();
-      }finally{
-        setSubmitting(false);
+      } finally {
+        state.isSubmitting = false;
+        els.createTaskBtn.disabled = false;
+        els.createTaskBtn.textContent = "开始生成";
       }
     }
 
-    function resetForm(){
-      $("projectName").value="";
-      $("templateName").value="";
-      $("exampleReference").value="";
-      $("audience").value="";
-      $("useCase").value="";
-      $("coreMessage").value="";
-      els.sourceUploads.value="";
-      els.sourceText.value="";
-      els.imageUploads.value="";
-      els.taskIdInput.value="";
-      state.taskId="";
-      state.nativeArtifactName="";
-      state.isSubmitting=false;
-      clearError();
-      els.submitHint.textContent="";
-      syncExampleTemplateState();
-      refreshSourceHint();
-      renderResultNeutral("任务完成后，这里会显示最终 `native_pptx` 下载按钮。");
-      els.taskSummary.textContent="暂无任务。";
-      els.taskMeta.innerHTML='<span class="dot"></span><span>未开始</span>';
-      els.downloadPptBtn.style.display="none";
-      setSubmitting(false);
-    }
+    async function refreshTask() {
+      const taskId = currentTaskId();
+      if (!taskId) {
+        return fail("请先提供 Task ID。");
+      }
 
-    function updateUploadHint(){return refreshSourceHint();}
+      const statePayload = await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`);
+      state.taskId = taskId;
+      els.taskIdInput.value = taskId;
 
-    async function createTask(){return submitTask();}
+      setTaskMeta(statePayload.status, statePayload.stage);
+      els.taskSummary.textContent = buildTaskSummary(statePayload);
 
-    async function refreshTask(){
-      const taskId=(els.taskIdInput.value||state.taskId).trim();
-      if(!taskId)return fail("请输入或先创建 task_id");
-      state.taskId=taskId;
-      const data=await apiFetch(`/api/v1/tasks/${taskId}`);
-      renderTask(data);
-      if(data.status==="succeeded")await loadArtifacts(taskId);
-      if(["failed","cancelled","succeeded"].includes(data.status))stopPolling();
-    }
+      if (statePayload.error) {
+        showError(statePayload.error);
+      }
 
-    async function loadArtifacts(taskId){
-      const data=await apiFetch(`/api/v1/tasks/${taskId}/artifacts`);
-      const items=data.artifacts||[];
-      const native=items.find(item=>item.name==="native_pptx");
-      if(native){
-        state.nativeArtifactName=native.name;
-        els.downloadPptBtn.style.display="inline-flex";
-        renderResultSuccess("生成完成，可以直接下载最终 PPT。");
-      }else{
-        state.nativeArtifactName="";
-        els.downloadPptBtn.style.display="none";
-        renderResultFail("任务已完成，但未找到最终 PPT 文件。");
+      const nativeArtifact = findNativeArtifact(statePayload.artifacts || []);
+      if (nativeArtifact) {
+        state.nativeArtifactName = nativeArtifact.name;
+        els.downloadPptBtn.style.display = "";
+        setResultBox(`任务已生成最终 PPT，可直接下载：${nativeArtifact.name}`, "success");
+      } else if (statePayload.status === "failed") {
+        state.nativeArtifactName = "";
+        els.downloadPptBtn.style.display = "none";
+        setResultBox(statePayload.error || "任务失败，请查看错误提示。", "fail");
+      } else if (statePayload.status === "cancelled") {
+        state.nativeArtifactName = "";
+        els.downloadPptBtn.style.display = "none";
+        setResultBox("任务已取消。", "fail");
+      } else if (statePayload.status === "succeeded") {
+        state.nativeArtifactName = "";
+        els.downloadPptBtn.style.display = "none";
+        setResultBox("任务已完成，但未找到可下载的 PPT 文件，请检查任务产物或联系管理员。", "fail");
+      } else {
+        state.nativeArtifactName = "";
+        els.downloadPptBtn.style.display = "none";
+        setResultBox(`当前阶段：${stageDesc(statePayload.stage)}。`, "default");
+      }
+
+      if (["succeeded", "failed", "cancelled"].includes(statePayload.status)) {
+        stopPolling();
       }
     }
 
-    async function cancelTask(){
-      const taskId=(els.taskIdInput.value||state.taskId).trim();
-      if(!taskId)return fail("没有可取消的任务");
-      await apiFetch(`/api/v1/tasks/${taskId}/cancel`,{method:"POST"});
+    async function cancelTask() {
+      const taskId = currentTaskId();
+      if (!taskId) {
+        return fail("请先提供 Task ID。");
+      }
+      await apiFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, {
+        method: "POST",
+        timeoutMs: 15000
+      });
       await refreshTask();
     }
 
-    function renderTask(task){
-      els.taskMeta.innerHTML=`<span class="dot"></span><span>${escapeHtml(task.status)} / ${escapeHtml(task.stage)}</span>`;
-      els.taskSummary.innerHTML=`当前阶段：<span class="code">${escapeHtml(stageDesc(task.stage))}</span><br>创建时间：${escapeHtml(task.created_at||"-")}<br>更新时间：${escapeHtml(task.updated_at||"-")}${task.error?`<br><span style="color:var(--bad)">错误：${escapeHtml(task.error)}</span>`:""}`;
-      if(task.status==="failed")renderResultFail(task.error||"任务执行失败。");
-      if(task.status==="cancelled")renderResultFail("任务已取消。");
-      if(task.status==="running"||task.status==="queued")renderResultPending(`正在处理：${stageDesc(task.stage)}`);
+    async function togglePolling() {
+      if (state.timer) {
+        stopPolling();
+        return;
+      }
+      const taskId = currentTaskId();
+      if (!taskId) {
+        return fail("请先提供 Task ID。");
+      }
+      startPolling();
+      await refreshTask();
     }
 
-    function downloadNativePpt(){
-      const taskId=(els.taskIdInput.value||state.taskId).trim();
-      if(!taskId||!state.nativeArtifactName)return fail("暂无可下载的最终 PPT");
-      window.open(`${normalizeBaseUrl(els.baseUrl.value)}/api/v1/tasks/${encodeURIComponent(taskId)}/download/${encodeURIComponent(state.nativeArtifactName)}`,"_blank");
+    function startPolling() {
+      stopPolling();
+      els.pollingBtn.textContent = "停止轮询";
+      state.timer = setInterval(() => {
+        refreshTask().catch((err) => showError(err.message || String(err)));
+      }, 5000);
     }
 
-    function startPolling(){stopPolling();state.timer=setInterval(()=>refreshTask().catch(err=>showError(err.message)),3000);els.pollingBtn.textContent="停止轮询"}
-    function stopPolling(){if(state.timer){clearInterval(state.timer);state.timer=null;}els.pollingBtn.textContent="开启轮询"}
-    async function togglePolling(){state.timer?stopPolling():startPolling()}
+    function stopPolling() {
+      if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
+      }
+      els.pollingBtn.textContent = "开启轮询";
+    }
 
-    function clearForm(){return resetForm();}
+    function downloadNativePpt() {
+      const taskId = currentTaskId();
+      if (!taskId || !state.nativeArtifactName) {
+        return fail("当前没有可下载的 PPT 文件。");
+      }
+      window.location.href = `/api/v1/tasks/${encodeURIComponent(taskId)}/download/${encodeURIComponent(state.nativeArtifactName)}`;
+    }
 
-    function stageDesc(name){return{queued:"任务已创建，等待执行",ingest:"正在导入文档与图片",strategist:"正在规划页面结构",executor_svg:"正在生成页面",executor_notes:"正在生成讲稿备注",postprocess:"正在执行后处理",export:"正在导出 PPT",completed:"任务完成"}[name]||name}
-    function nullable(v){v=(v||"").trim();return v||null}
-    function showError(message){els.errorBanner.style.display="block";els.errorBanner.textContent=message}
-    function clearError(){els.errorBanner.style.display="none";els.errorBanner.textContent=""}
-    function fail(msg){showError(msg);throw new Error(msg)}
-    function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[s]))}
-    function metaRow(label,value){return `<div class="meta-item"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`}
-    function formatBytes(v){if(v===null||v===undefined)return"-";const u=["B","KB","MB","GB"];let i=0,n=v;while(n>=1024&&i<u.length-1){n/=1024;i++}return`${n.toFixed(n>=100||i===0?0:1)} ${u[i]}`}
-    function formatConfidence(v){if(v===null||v===undefined||v==="")return"-";const n=Number(v);if(Number.isNaN(n))return String(v);return`${Math.round(n*100)}%`}
-    function renderResultNeutral(text){els.resultBox.className="result-box";els.resultBox.textContent=text}
-    function renderResultPending(text){els.resultBox.className="result-box";els.resultBox.textContent=text;els.downloadPptBtn.style.display="none"}
-    function renderResultSuccess(text){els.resultBox.className="result-box success";els.resultBox.textContent=text}
-    function renderResultFail(text){els.resultBox.className="result-box fail";els.resultBox.textContent=text;els.downloadPptBtn.style.display="none"}
-    function setSubmitting(flag,message=""){
-      state.isSubmitting=flag;
-      els.createTaskBtn.disabled=flag;
-      els.createTaskBtn.textContent=flag?"正在提交...":"开始生成";
-      if(message)els.submitHint.textContent=message;
+    function resetForm() {
+      els.projectName.value = "";
+      els.canvasFormat.value = "ppt169";
+      els.templateName.value = "";
+      els.exampleReference.value = "";
+      els.preferStyle.value = "auto";
+      els.audience.value = "";
+      els.useCase.value = "";
+      els.coreMessage.value = "";
+      els.sourceUploads.value = "";
+      els.sourceText.value = "";
+      els.imageUploads.value = "";
+      clearError();
+      refreshModeHint();
+      refreshSourceHint();
+    }
+
+    function currentTaskId() {
+      return (els.taskIdInput.value || state.taskId || "").trim();
+    }
+
+    function setTaskMeta(status, stage) {
+      els.taskMeta.innerHTML = `<span class="dot"></span><span>${escapeHtml(stageDesc(stage))}</span>`;
+      if (status === "failed" || status === "cancelled") {
+        els.taskMeta.style.color = "var(--bad)";
+        els.taskMeta.style.background = "rgba(178,58,49,.08)";
+      } else if (status === "succeeded") {
+        els.taskMeta.style.color = "var(--ok)";
+        els.taskMeta.style.background = "rgba(33,114,78,.08)";
+      } else {
+        els.taskMeta.style.color = "var(--teal)";
+        els.taskMeta.style.background = "rgba(39,93,87,.08)";
+      }
+    }
+
+    function buildTaskSummary(payload) {
+      const requestInfo = payload.request || {};
+      const parts = [
+        `状态：${payload.status || "-"}`,
+        `阶段：${stageDesc(payload.stage || "-")}`
+      ];
+      if (requestInfo.template_name) {
+        parts.push(`模板：${requestInfo.template_name}`);
+      }
+      if (requestInfo.example_reference) {
+        parts.push(`样例：${requestInfo.example_reference}`);
+      }
+      if (requestInfo.source_mode) {
+        parts.push(`输入方式：${requestInfo.source_mode}`);
+      }
+      if (payload.cancel_requested) {
+        parts.push("已请求取消");
+      }
+      if (payload.error) {
+        parts.push(`错误：${payload.error}`);
+      }
+      return parts.join(" · ");
+    }
+
+    function findNativeArtifact(artifacts) {
+      // The API uses stable artifact IDs for download URLs, not filenames.
+      const nativeArtifact = artifacts.find((item) => item && item.kind === "file" && item.name === "native_pptx");
+      if (nativeArtifact) {
+        return nativeArtifact;
+      }
+      return artifacts.find((item) => {
+        if (!item || item.kind !== "file") {
+          return false;
+        }
+        const name = String(item.name || "");
+        return name.endsWith(".pptx") && !name.endsWith("_svg.pptx");
+      }) || null;
+    }
+
+    function setResultBox(message, tone) {
+      els.resultBox.textContent = message;
+      els.resultBox.className = "result-box";
+      if (tone === "success") {
+        els.resultBox.classList.add("success");
+      } else if (tone === "fail") {
+        els.resultBox.classList.add("fail");
+      }
+    }
+
+    function showError(message) {
+      if (!message) {
+        return;
+      }
+      els.errorBanner.style.display = "block";
+      els.errorBanner.textContent = message;
+    }
+
+    function clearError() {
+      els.errorBanner.style.display = "none";
+      els.errorBanner.textContent = "";
+    }
+
+    function fail(message) {
+      showError(message);
+      throw new Error(message);
+    }
+
+    function nullable(value) {
+      const text = String(value || "").trim();
+      return text || null;
+    }
+
+    function formatBytes(value) {
+      if (!Number.isFinite(value) || value <= 0) {
+        return "0 B";
+      }
+      if (value < 1024) {
+        return `${value} B`;
+      }
+      if (value < 1024 * 1024) {
+        return `${(value / 1024).toFixed(1)} KB`;
+      }
+      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function stageDesc(name) {
+      return {
+        queued: "任务已创建，等待执行",
+        ingest: "正在导入文档与图片",
+        strategist: "正在规划页面结构",
+        executor_svg: "正在生成页面",
+        executor_notes: "正在生成讲稿备注",
+        postprocess: "正在执行后处理",
+        export: "正在导出 PPT",
+        completed: "任务完成",
+        failed: "任务失败",
+        cancelled: "任务已取消"
+      }[name] || name;
     }
   </script>
 </body>

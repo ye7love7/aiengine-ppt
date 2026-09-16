@@ -29,6 +29,7 @@ from service_api.rendering import (  # noqa: E402
     _get_template_layout_config,
     _get_template_contract,
     render_slide_svg,
+    split_text,
 )
 
 
@@ -102,6 +103,15 @@ class ServiceApiTests(unittest.TestCase):
         content = "<think>{\"draft\": true}</think>\n{\"final\": 1}"
         payload = client._parse_json(content)
         self.assertEqual(payload, {"final": 1})
+
+    def test_llm_api_key_is_masked_in_logs(self) -> None:
+        self.assertEqual(LLMClient._mask_api_key("ms-1234567890abcd"), "ms-12...abcd")
+        self.assertEqual(LLMClient._mask_api_key(""), "<empty>")
+
+    def test_split_text_wraps_cjk_without_whitespace(self) -> None:
+        lines = split_text("这是一个用于验证中文标题自动换行的较长字符串", 10)
+        self.assertGreater(len(lines), 1)
+        self.assertTrue(all(len(line) <= 10 for line in lines))
 
     def test_materials_is_public(self) -> None:
         response = self.client.get("/api/v1/materials")

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -64,6 +66,7 @@ def run_task(task_id: str) -> None:
     manager = ProjectManager()
     project_path: Optional[Path] = None
     try:
+        _check_export_dependencies()
         STORE.update_state(task_id, status="running", stage="ingest")
         STORE.append_log(task_id, f"Task started (upstream_user_id={state.upstream_user_id or '-'})")
         source_paths, image_paths = _resolve_inputs(task_id, request_data)
@@ -127,6 +130,17 @@ def run_task(task_id: str) -> None:
 
 class CancelledError(RuntimeError):
     pass
+
+
+def _check_export_dependencies() -> None:
+    # Validate before making paid LLM calls, including when started without scripts.
+    try:
+        importlib.import_module("pptx")
+    except ImportError as exc:
+        raise RuntimeError(
+            f"PPT 导出依赖不可用：{exc}。请在服务使用的 Python 环境安装依赖："
+            f'"{sys.executable}" -m pip install -r api_requirements.txt'
+        ) from exc
 
 
 def _check_cancel(task_id: str) -> None:
@@ -736,9 +750,14 @@ def _normalize_image_choice(candidate: str, image_files: list[str]) -> str:
 
 def _run_script(task_id: str, command: list[str]) -> None:
     STORE.append_log(task_id, f"Running command: {' '.join(command)}")
+    # The child must emit UTF-8 too; encoding= only controls the parent decoder.
+    child_env = os.environ.copy()
+    child_env["PYTHONIOENCODING"] = "utf-8"
+    child_env["PYTHONUTF8"] = "1"
     result = subprocess.run(
         command,
         cwd=SETTINGS.repo_root,
+        env=child_env,
         text=True,
         capture_output=True,
         encoding="utf-8",
@@ -752,7 +771,10 @@ def _run_script(task_id: str, command: list[str]) -> None:
     if stderr_text.strip():
         STORE.append_log(task_id, stderr_text.strip())
     if result.returncode != 0:
-        raise RuntimeError(f"Command failed ({result.returncode}): {' '.join(command)}")
+        # Expose the actual error on the task page; full output remains in run.log.
+        output = stderr_text.strip() or stdout_text.strip()
+        detail = output[-1500:] if output else "No output from command"
+        raise RuntimeError(f"Command failed ({result.returncode}): {' '.join(command)}\n{detail}")
 
 
 def _normalize_export_command_output(command: list[str], output: str) -> str:

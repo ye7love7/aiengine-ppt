@@ -45,8 +45,9 @@ if errorlevel 1 (
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
+set "EXISTING_PID="
+if exist "%PID_FILE%" set /p EXISTING_PID=<"%PID_FILE%"
 if exist "%PID_FILE%" (
-  set /p EXISTING_PID=<"%PID_FILE%"
   if not "%EXISTING_PID%"=="" (
     powershell -NoProfile -Command "try { if (Get-Process -Id %EXISTING_PID% -ErrorAction Stop) { exit 0 } } catch { exit 1 }"
     if not errorlevel 1 (
@@ -64,22 +65,12 @@ echo [INFO] Open: http://127.0.0.1:%PORT%/frontend
 
 if /I "%MODE%"=="foreground" (
   python -m uvicorn service_api.main:app --host %HOST% --port %PORT%
-  exit /b %errorlevel%
+  goto :foreground_done
 )
 
-for /f %%P in ('powershell -NoProfile -Command "$p = Start-Process -FilePath python -ArgumentList @('-m','uvicorn','service_api.main:app','--host','%HOST%','--port','%PORT%') -WorkingDirectory '%CD%' -RedirectStandardOutput '%STDOUT_LOG%' -RedirectStandardError '%STDERR_LOG%' -WindowStyle Hidden -PassThru; $p.Id"') do set "SERVICE_PID=%%P"
-
-if "%SERVICE_PID%"=="" (
-  echo [ERROR] Failed to start service in background.
-  exit /b 1
-)
-
-> "%PID_FILE%" echo %SERVICE_PID%
-echo [INFO] Service started in background.
-echo [INFO] PID: %SERVICE_PID%
-echo [INFO] Stdout log: %STDOUT_LOG%
-echo [INFO] Stderr log: %STDERR_LOG%
-exit /b 0
+python "%~dp0service_api\start_background.py"
+:foreground_done
+exit /b %errorlevel%
 
 :help
 echo Usage: start_windows.bat [--foreground ^| --background]

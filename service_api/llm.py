@@ -47,7 +47,6 @@ class LLMClient:
                     model=SETTINGS.llm_model,
                     temperature=SETTINGS.llm_temperature,
                     max_tokens=max_tokens,
-                    response_format={"type": "json_object"},
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
@@ -73,15 +72,18 @@ class LLMClient:
                 if attempt >= SETTINGS.llm_max_retries:
                     break
                 time.sleep(1.5 * (attempt + 1))
-        raise RuntimeError(f"LLM request failed: {last_error}") from last_error
+        detail = self._format_exception(last_error) if last_error else "unknown error"
+        raise RuntimeError(f"LLM request failed: {detail}") from last_error
 
     def _emit_request_logs(self, task_id: Optional[str], stage_label: str, payload: dict[str, Any]) -> None:
         if not task_id:
             return
-        STORE.write_stage_metadata(task_id, f"{stage_label}_llm_request", payload)
+        safe_payload = dict(payload)
+        safe_payload["api_key"] = self._mask_api_key(str(payload.get("api_key", "")))
+        STORE.write_stage_metadata(task_id, f"{stage_label}_llm_request", safe_payload)
         STORE.append_log(
             task_id,
-            f"[LLM:{stage_label}] request base_url={payload['base_url']} model={payload['model']} api_key={payload['api_key']}",
+            f"[LLM:{stage_label}] request base_url={payload['base_url']} model={payload['model']} api_key={safe_payload['api_key']}",
         )
         STORE.append_log(task_id, f"[LLM:{stage_label}] system_prompt:\n{payload['system_prompt']}")
         STORE.append_log(task_id, f"[LLM:{stage_label}] user_prompt:\n{payload['user_prompt']}")
@@ -95,7 +97,34 @@ class LLMClient:
     def _emit_error_log(self, task_id: Optional[str], stage_label: str, attempt: int, exc: Exception) -> None:
         if not task_id:
             return
-        STORE.append_log(task_id, f"[LLM:{stage_label}] attempt={attempt + 1} failed: {exc}")
+        STORE.append_log(task_id, f"[LLM:{stage_label}] attempt={attempt + 1} failed: {self._format_exception(exc)}")
+
+    @staticmethod
+    def _format_exception(exc: Optional[Exception]) -> str:
+        """Include useful HTTP/status details while keeping errors concise."""
+        if exc is None:
+            return "unknown error"
+        parts = [f"{type(exc).__name__}: {exc}"]
+        response = getattr(exc, "response", None)
+        if response is not None:
+            status = getattr(response, "status_code", None)
+            body = getattr(response, "text", None)
+            if status is not None:
+                parts.append(f"status={status}")
+            if body:
+                parts.append(f"body={str(body)[:500]}")
+        cause = getattr(exc, "__cause__", None)
+        if cause and str(cause) and str(cause) != str(exc):
+            parts.append(f"cause={type(cause).__name__}: {cause}")
+        return " | ".join(parts)
+
+    @staticmethod
+    def _mask_api_key(value: str) -> str:
+        if not value:
+            return "<empty>"
+        if len(value) <= 9:
+            return "***"
+        return f"{value[:5]}...{value[-4:]}"
 
     def _dump_response(self, response: Any) -> dict[str, Any]:
         if hasattr(response, "model_dump"):

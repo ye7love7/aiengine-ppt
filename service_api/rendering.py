@@ -4,6 +4,7 @@ import html
 import json
 import re
 import sys
+import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
@@ -57,6 +58,7 @@ def slugify(value: str) -> str:
 def split_text(text: str, max_chars: int) -> list[str]:
     if not text:
         return []
+    max_chars = max(1, int(max_chars))
     words = text.split()
     if len(words) == 1 and len(words[0]) > max_chars:
         text = words[0]
@@ -91,6 +93,59 @@ def text_block(x: int, y: int, lines: list[str], font_size: int, fill: str, weig
         + "".join(tspan_lines)
         + "</text>"
     )
+
+
+class SlideLayoutError(ValueError):
+    """Content cannot fit legibly; the executor must simplify it before export."""
+
+
+def _text_units(text: str) -> float:
+    # Conservative em widths; unlike character counts this handles CJK mixed
+    # with spaces, Latin identifiers and numbers. No platform font dependency.
+    return sum(0 if unicodedata.combining(c) else
+               1.0 if unicodedata.east_asian_width(c) in {"W", "F"} else
+               0.35 if c.isspace() else 0.65 for c in text)
+
+
+def _wrap_to_width(text: str, width: float, size: int) -> list[str]:
+    lines: list[str] = []
+    for paragraph in str(text).splitlines() or [""]:
+        current = ""
+        for char in paragraph:
+            if current and _text_units(current + char) * size > width:
+                lines.append(current.rstrip())
+                current = ""
+            current += char
+        lines.append(current.rstrip())
+    return lines
+
+
+def _append_section_text(parts: list[str], section: dict[str, Any], x: int, y: int,
+                         width: int, height: int, theme: dict[str, str],
+                         typography: dict[str, Any], title_size: int = 20) -> None:
+    """Fit the complete section, then place bullets using their actual line count."""
+    heading = str(section.get("heading") or "")
+    items = [str(item) for item in section.get("items", [])]
+    preferred = int(typography.get("body_size") or 20)
+    for size in range(preferred, 15, -1):
+        heading_size = max(size, title_size)
+        title_lines = _wrap_to_width(heading, width, heading_size) if heading else []
+        item_lines = [_wrap_to_width(item, width - 18, size) for item in items]
+        title_h = len(title_lines) * int(heading_size * 1.45)
+        needed = title_h + (12 if title_lines and items else 0)
+        needed += sum(len(lines) * int(size * 1.45) + 10 for lines in item_lines)
+        if needed <= height:
+            break
+    else:
+        raise SlideLayoutError(f"Section '{heading}' exceeds {width}x{height}px at 16px; shorten items or split the page.")
+    cursor = y
+    if title_lines:
+        parts.append(text_block(x, cursor + heading_size, title_lines, heading_size, theme["text"], "700"))
+        cursor += title_h + 12
+    for lines in item_lines:
+        parts.append(f'<circle cx="{x + 4}" cy="{cursor + size - 6}" r="3" fill="{theme["accent"]}"/>')
+        parts.append(text_block(x + 18, cursor + size, lines, size, theme["text"]))
+        cursor += len(lines) * int(size * 1.45) + 10
 
 
 def render_slide_svg(
@@ -237,7 +292,9 @@ def _render_template_driven_slide(
         raw_text = "".join(elem.itertext()).strip()
         if not raw_text:
             continue
-        if "{{CONTENT_AREA}}" in raw_text or _is_template_hint_text(raw_text):
+        # Template assets often contain instructional/demo copy in addition to
+        # explicit placeholders.  It must never leak into the generated deck.
+        if raw_text in {'""', "''"} or "{{CONTENT_AREA}}" in raw_text or _is_template_hint_text(raw_text):
             if content_box and _element_within_box(elem, content_box):
                 parent = parent_map.get(elem)
                 if parent is not None:
@@ -376,7 +433,23 @@ def _build_base_template_semantics(slide: dict[str, Any], strategy: dict[str, An
         "QUOTE": highlight or slide.get("goal") or slide.get("title") or "",
         "QUOTE_AUTHOR": project_name,
         "COVER_BG_IMAGE": "",
+        "PAGE_LABEL": slide.get("subtitle") or slide.get("page_type", "").upper(),
+        "BRAND_LABEL": str(strategy.get("project_name") or "").upper(),
+        "COVER_QUOTE": highlight or slide.get("goal") or "",
     }
+    # Card-oriented templates (for example Anthropic) use a separate contract
+    # from the generic CONTENT_AREA anchor. Populate every card field from the
+    # normalized section payload so the template's visual grammar is retained.
+    for idx in range(1, 4):
+        section = sections[idx - 1] if idx - 1 < len(sections) else {}
+        items = [str(item).strip() for item in (section.get("items") or [])[:4]] if isinstance(section, dict) else []
+        semantic_values[f"CARD_{idx}_TITLE"] = str(section.get("heading") or "").strip() if isinstance(section, dict) else ""
+        semantic_values[f"CARD_{idx}_SUBTITLE"] = items[0] if items else ""
+        semantic_values[f"CARD_{idx}_LINE1"] = items[1] if len(items) > 1 else ""
+        semantic_values[f"CARD_{idx}_LINE2"] = items[2] if len(items) > 2 else ""
+        semantic_values[f"CARD_{idx}_NOTE1"] = items[3] if len(items) > 3 else ""
+        semantic_values[f"CARD_{idx}_NOTE2"] = ""
+        semantic_values[f"CARD_{idx}_TAG"] = (kpis[idx - 1].get("label", "") if idx - 1 < len(kpis) else "")
     for idx in range(1, 7):
         section = sections[idx - 1] if idx - 1 < len(sections) else {}
         items = section.get("items", []) if isinstance(section, dict) else []
@@ -650,7 +723,13 @@ def _detect_content_box(root: ET.Element) -> dict[str, Any] | None:
 
 
 def _is_template_hint_text(text: str) -> bool:
-    markers = ["Executor", "自由布局", "可用空间", "内容区域", "由 Executor", "AI 灵活布局区域", "可使用的布局模式"]
+    markers = [
+        "Executor", "自由布局", "可用空间", "内容区域", "由 Executor",
+        "AI 灵活布局区域", "可使用的布局模式",
+        # Demo labels shipped with several built-in templates.
+        "Single LLM Call", "Workflows", "Autonomous Agents", "复杂度递增", "按需升级",
+        "示例", "占位", "placeholder", "PLACEHOLDER",
+    ]
     return any(marker in text for marker in markers)
 
 

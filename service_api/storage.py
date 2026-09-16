@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -98,7 +99,13 @@ class TaskStore:
         line = f"[{timestamp}] {message}"
         with self.log_path(task_id).open("a", encoding="utf-8") as handle:
             handle.write(f"{line}\n")
-        print(line, flush=True)
+        try:
+            print(line, flush=True)
+        except UnicodeEncodeError:
+            # Keep the UTF-8 file intact; an ANSI console must not fail a task.
+            encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+            safe_line = line.encode(encoding, errors="backslashreplace").decode(encoding)
+            print(safe_line, flush=True)
 
     def set_artifacts(self, task_id: str, artifacts: list[ArtifactEntry]) -> TaskState:
         return self.update_state(task_id, artifacts=artifacts)
